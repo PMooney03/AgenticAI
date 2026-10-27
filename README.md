@@ -118,6 +118,7 @@ data flow.
 | 7 | Logging, metrics, evaluation (LLMOps) | Done |
 | 8 | Docker Compose + CI/CD hardening | Done |
 | Follow-up | Durable SQLite LangGraph checkpoints so HITL survives restart | Done |
+| Follow-up | Fake-provider Compose smoke so CI can `up` without Ollama | Done |
 
 ## Local setup
 
@@ -344,9 +345,10 @@ data/                    (gitignored) uploads/, qdrant/, registry.db, notes.json
 
 ## Design decisions
 
-- **Provider abstraction.** `LLMProvider` is a small `Protocol`; `OllamaProvider` is the only
-  implementation today. Swapping to another runtime (or a hosted model such as Azure OpenAI)
-  means adding one class, not touching routes or prompts.
+- **Provider abstraction.** `LLMProvider` is a small `Protocol`. `OllamaProvider` is the
+  local runtime; `LLM_PROVIDER=fake` (and matching embeddings) is the CI seam so Compose
+  can `up` without Ollama. Swapping to a hosted model such as Azure OpenAI means adding
+  one class, not touching routes or prompts.
 - **Prompt versioning.** Prompts live in `app/prompts/` with explicit version IDs
   (`chat-system-v1`). Every response and log line carries the version used.
 - **Request-scoped observability.** Each request gets an ID (honouring an incoming
@@ -409,6 +411,10 @@ change. `uv sync --frozen` and `npm ci` make the images match the lockfiles. ngi
 serves the SPA and proxies `/chat`, `/documents`, `/agent`, `/metrics` and `/eval` to
 FastAPI.
 
+`docker-compose.fake.yml` is a separate project (`asb-fake`) on `127.0.0.1:18000` that
+runs the same backend image with fakes and in-process Qdrant, so CI can smoke `up`
+without Ollama and without touching the inner-loop vector DB.
+
 Full write-up: [docs/interview-notes/docker.md](docs/interview-notes/docker.md).
 
 ## CI/CD
@@ -417,7 +423,8 @@ GitHub Actions (`.github/workflows/ci.yml`) on push and pull request:
 
 1. Backend: Ruff, pytest, `python -m app.eval` (no Ollama).
 2. Frontend: oxlint, Vitest, production build.
-3. `docker compose --profile app build` after both pass. Images are not pushed.
+3. `docker compose --profile app build`, then a fake-provider `up` smoke (`GET /health`
+   and `POST /chat` on port 18000, no Ollama). Images are not pushed.
 
 Full write-up: [docs/interview-notes/ci.md](docs/interview-notes/ci.md).
 
@@ -432,7 +439,6 @@ Full write-up: [docs/interview-notes/ci.md](docs/interview-notes/ci.md).
 
 ## Future improvements
 
-- Fake-provider compose profile for a full `up` smoke test in CI without Ollama.
 - Hybrid search (keyword + vectors) and a live-model nightly eval.
 - Sandbox PDF parsing; optional auth if the bind address ever leaves localhost.
 

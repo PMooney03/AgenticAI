@@ -40,7 +40,7 @@ flowchart TD
 | MCP server + client | Allowlisted calculator + clock over official `mcp` SDK | Phase 5 |
 | Human-in-the-loop | `interrupt()` on `save_note`; SQLite checkpointer; `POST /agent/runs/{id}/decision` | Phase 6 |
 | Evaluation | Golden set, citation rate, lexical groundedness, HITL checks | Phase 7 |
-| Docker Compose + CI | `frontend`, `backend`, `qdrant`; GitHub Actions lint/test/eval/build | Phase 8 |
+| Docker Compose + CI | `frontend`, `backend`, `qdrant`; fake-provider smoke `up`; GitHub Actions | Phase 8 |
 
 ## Ingestion flow (Phase 2)
 

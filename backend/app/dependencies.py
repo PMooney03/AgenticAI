@@ -15,9 +15,9 @@ from fastapi import Depends, Request
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from app.config import Settings, get_settings
-from app.embeddings import EmbeddingProvider, LocalEmbeddingProvider
+from app.embeddings import EmbeddingProvider, FakeEmbeddingProvider, LocalEmbeddingProvider
 from app.ingestion import DocumentRegistry, IngestionService
-from app.llm import LLMProvider, OllamaProvider
+from app.llm import FakeLLMProvider, LLMProvider, OllamaProvider
 from app.rag import RAGPipeline
 from app.retrieval import QdrantVectorStore, Retriever, VectorStore
 
@@ -37,6 +37,8 @@ def _build_ollama_provider(
 
 
 def get_llm_provider(settings: SettingsDep) -> LLMProvider:
+    if settings.llm_provider == "fake":
+        return FakeLLMProvider()
     return _build_ollama_provider(
         settings.ollama_base_url_str,
         settings.ollama_model,
@@ -55,6 +57,8 @@ def _build_embedding_provider(
 
 
 def get_embedding_provider(settings: SettingsDep) -> EmbeddingProvider:
+    if settings.embedding_provider == "fake":
+        return FakeEmbeddingProvider()
     return _build_embedding_provider(
         settings.ollama_base_url_str,
         settings.embedding_model,

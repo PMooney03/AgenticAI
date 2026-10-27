@@ -69,3 +69,16 @@ jobs:
         run: docker compose --profile app config
       - name: Build backend and frontend images
         run: docker compose --profile app build
+      - name: Fake-provider compose smoke
+        run: |
+          docker compose -f docker-compose.fake.yml up --build -d --wait
+          curl -fsS http://127.0.0.1:18000/health -o /tmp/asb-health.json
+          python3 -c "import json; d=json.load(open('/tmp/asb-health.json')); assert d['status']=='ok', d"
+          curl -fsS http://127.0.0.1:18000/chat \
+            -H 'Content-Type: application/json' \
+            -d '{"message":"hello","use_documents":false}' \
+            -o /tmp/asb-chat.json
+          python3 -c "import json; d=json.load(open('/tmp/asb-chat.json')); assert d.get('answer'), d"
+      - name: Tear down fake stack
+        if: always()
+        run: docker compose -f docker-compose.fake.yml down -v

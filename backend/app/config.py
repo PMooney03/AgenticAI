@@ -16,6 +16,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+ProviderKind = Literal["ollama", "fake"]
 
 
 class Settings(BaseSettings):
@@ -35,12 +36,14 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # --- Ollama -------------------------------------------------------------
+    llm_provider: ProviderKind = "ollama"
     ollama_base_url: HttpUrl = Field(default=HttpUrl("http://localhost:11434"))
     ollama_model: str = "qwen2.5:14b"
     ollama_timeout_seconds: float = Field(default=120.0, gt=0)
     ollama_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
 
-    # --- Embeddings (served by the same Ollama instance) -------------------
+    # --- Embeddings (served by the same Ollama instance unless provider=fake) ---
+    embedding_provider: ProviderKind = "ollama"
     embedding_model: str = "nomic-embed-text"
     embedding_batch_size: int = Field(default=32, ge=1, le=256)
 

@@ -36,6 +36,7 @@ Without Compose you document four terminals and hope the URLs match.
 ```
 docker compose up -d qdrant                  # inner loop: only the vector DB
 docker compose --profile app up -d --build   # UI :8080, API :8000, Qdrant :6333
+docker compose -f docker-compose.fake.yml up --build -d --wait  # CI smoke, no Ollama
 ```
 
 - `qdrant` has no profile, so the original `up -d qdrant` workflow is unchanged.
@@ -47,6 +48,9 @@ docker compose --profile app up -d --build   # UI :8080, API :8000, Qdrant :6333
   fallback.
 - `DATA_DIR=/data` is a bind mount of `./data` (uploads, SQLite, notes.jsonl).
 - Health checks: Qdrant TCP probe (the image has no curl); backend `GET /health`.
+- `docker-compose.fake.yml` is a separate Compose project (`asb-fake`) on port 18000.
+  `LLM_PROVIDER=fake` and `QDRANT_URL=:memory:` mean it never talks to Ollama or the
+  inner-loop Qdrant. No volume: the image's `/data` stays writable by uid 10001.
 
 ## How I would explain it in an interview
 

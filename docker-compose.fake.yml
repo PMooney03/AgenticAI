@@ -1,0 +1,25 @@
+# Isolated CI / smoke stack. No Ollama, no host Qdrant, no ports 6333/8000/8080.
+# Project name `asb-fake` so this never collides with the inner-loop `asb-qdrant`.
+#
+#   docker compose -f docker-compose.fake.yml up --build -d --wait
+#   curl http://127.0.0.1:18000/health
+#   docker compose -f docker-compose.fake.yml down -v
+
+name: asb-fake
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      LLM_PROVIDER: fake
+      EMBEDDING_PROVIDER: fake
+      QDRANT_URL: ":memory:"
+      DATA_DIR: /data
+      CORS_ORIGINS: http://localhost:18000,http://127.0.0.1:18000
+      LOG_LEVEL: INFO
+    ports:
+      - "127.0.0.1:18000:8000"
+    # No volume: the image's /data is already owned by uid 10001. A named volume
+    # would remount it as root and break checkpoint/notes writes in CI.

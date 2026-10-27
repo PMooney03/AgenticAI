@@ -18,6 +18,8 @@ def test_defaults_point_at_local_ollama(monkeypatch: pytest.MonkeyPatch) -> None
     assert s.cors_origin_list == ["http://localhost:5173", "http://127.0.0.1:5173"]
     assert s.agent_max_steps == 3
     assert s.checkpoint_path.name == "checkpoints.sqlite"
+    assert s.llm_provider == "ollama"
+    assert s.embedding_provider == "ollama"
 
 
 def test_cors_origins_are_split_and_trimmed() -> None:
@@ -53,3 +55,10 @@ def test_invalid_log_level_rejected() -> None:
 def test_timeout_must_be_positive() -> None:
     with pytest.raises(ValidationError):
         _settings(ollama_timeout_seconds=0)
+
+
+def test_unknown_provider_rejected() -> None:
+    with pytest.raises(ValidationError):
+        _settings(llm_provider="azure")
+    with pytest.raises(ValidationError):
+        _settings(embedding_provider="openai")

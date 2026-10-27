@@ -36,6 +36,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             extra={
                 "model": settings.ollama_model,
                 "embedding_model": settings.embedding_model,
+                "llm_provider": settings.llm_provider,
+                "embedding_provider": settings.embedding_provider,
                 "ollama_base_url": settings.ollama_base_url_str,
                 "qdrant_url": settings.qdrant_url,
                 "log_level": settings.log_level,
