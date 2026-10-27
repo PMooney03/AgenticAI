@@ -27,11 +27,14 @@ def test_build_chat_messages_puts_system_prompt_first_then_history_then_user() -
 
 
 def test_chat_happy_path(client: TestClient, fake_llm: FakeLLMProvider) -> None:
-    response = client.post("/chat", json={"message": "What is a vector database?"})
+    response = client.post(
+        "/chat", json={"message": "What is a vector database?", "use_documents": False}
+    )
 
     assert response.status_code == 200
     body = response.json()
     assert body["answer"] == "Hello from the fake model."
+    assert body["mode"] == "chat"
     assert body["model"] == "test-model:latest"
     assert body["prompt_version"] == "chat-system-v1"
     assert body["request_id"] == response.headers["X-Request-ID"]
@@ -49,6 +52,7 @@ def test_chat_happy_path(client: TestClient, fake_llm: FakeLLMProvider) -> None:
 def test_chat_forwards_history(client: TestClient, fake_llm: FakeLLMProvider) -> None:
     payload = {
         "message": "Summarise that.",
+        "use_documents": False,
         "history": [
             {"role": "user", "content": "Tell me about Qdrant."},
             {"role": "assistant", "content": "Qdrant is a vector database."},

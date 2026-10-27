@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, HttpUrl, field_validator
+from pydantic import Field, HttpUrl, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/app/config.py -> repository root is two levels up from ``backend``.
@@ -38,13 +38,51 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: float = Field(default=120.0, gt=0)
     ollama_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
 
-    @field_validator("ollama_model")
+    # --- Embeddings (served by the same Ollama instance) -------------------
+    embedding_model: str = "nomic-embed-text"
+    embedding_batch_size: int = Field(default=32, ge=1, le=256)
+
+    # --- Qdrant -------------------------------------------------------------
+    # A URL for the Docker service, or ":memory:" for an in-process store (tests).
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_collection: str = "documents"
+    qdrant_api_key: SecretStr | None = None
+
+    # --- Ingestion ----------------------------------------------------------
+    data_dir: Path = _REPO_ROOT / "data"
+    max_upload_mb: int = Field(default=20, ge=1, le=500)
+    chunk_size_tokens: int = Field(default=400, ge=50, le=4000)
+    chunk_overlap_tokens: int = Field(default=60, ge=0, le=1000)
+
+    # --- Retrieval ----------------------------------------------------------
+    retrieval_top_k: int = Field(default=4, ge=1, le=20)
+    retrieval_score_threshold: float = Field(default=0.0, ge=-1.0, le=1.0)
+
+    @field_validator("ollama_model", "embedding_model", "qdrant_collection")
     @classmethod
-    def _model_not_blank(cls, value: str) -> str:
+    def _not_blank(cls, value: str) -> str:
         value = value.strip()
         if not value:
-            raise ValueError("OLLAMA_MODEL must not be empty")
+            raise ValueError("value must not be empty")
         return value
+
+    @model_validator(mode="after")
+    def _overlap_smaller_than_chunk(self) -> "Settings":
+        if self.chunk_overlap_tokens >= self.chunk_size_tokens:
+            raise ValueError("CHUNK_OVERLAP_TOKENS must be smaller than CHUNK_SIZE_TOKENS")
+        return self
+
+    @property
+    def upload_dir(self) -> Path:
+        return self.data_dir / "uploads"
+
+    @property
+    def registry_db_path(self) -> Path:
+        return self.data_dir / "registry.db"
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
 
     @property
     def ollama_base_url_str(self) -> str:

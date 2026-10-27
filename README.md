@@ -5,9 +5,9 @@ traditional RAG "second brain" into a LangGraph-driven agent that decides when t
 documents, when to call tools (via MCP), and when to keep reasoning through a multi-step
 workflow, with human approval for anything that changes state.
 
-> Status: **Phase 1 complete** - FastAPI backend with a versioned prompt, an `LLMProvider`
-> abstraction backed by Ollama, request-scoped logging, and a tested `/chat` endpoint.
-> See [Build phases](#build-phases) for what comes next.
+> Status: **Phase 2 complete** - upload PDF / TXT / Markdown, index with local embeddings
+> into Qdrant, and ask questions that are answered strictly from your documents with
+> page-level citations. See [Build phases](#build-phases) for what comes next.
 
 ## Table of contents
 
@@ -18,6 +18,9 @@ workflow, with human approval for anything that changes state.
 - [Build phases](#build-phases)
 - [Local setup](#local-setup)
 - [API](#api)
+- [How RAG works here](#how-rag-works-here)
+- [Where each framework is used](#where-each-framework-is-used)
+- [Security and privacy](#security-and-privacy)
 - [Testing](#testing)
 - [Project structure](#project-structure)
 - [Design decisions](#design-decisions)
@@ -77,18 +80,21 @@ MCP, responsible-AI controls (human-in-the-loop, permission boundaries), LLMOps
    Local Embeddings
 ```
 
-Phase 1 implements the `FastAPI -> LLMProvider -> Ollama` path. See
-[docs/architecture.md](docs/architecture.md) for the full target design and data flow.
+Phases 1-2 implement the `FastAPI -> RAG -> LlamaIndex / Qdrant / Embeddings -> Ollama`
+path. See [docs/architecture.md](docs/architecture.md) for the full target design and data
+flow.
 
 ## Technology stack
 
 | Layer | Technology | Role |
 | --- | --- | --- |
 | Backend | Python 3.12, FastAPI, Pydantic | HTTP API, validation, error handling |
-| LLM runtime | Ollama | Local inference for chat and embedding models |
+| LLM runtime | Ollama (`qwen2.5:14b`) | Local inference for the chat model |
+| Embeddings | Ollama (`nomic-embed-text`) | Local 768-d embeddings for chunks and queries |
 | LLM abstraction | LangChain (`langchain-core`, `langchain-ollama`) | Provider-agnostic chat model, prompts, tool definitions |
-| Ingestion | LlamaIndex (Phase 2) | Document loading and metadata-preserving chunking |
-| Vector DB | Qdrant in Docker (Phase 2) | Semantic search over chunk embeddings |
+| Ingestion | LlamaIndex (`PDFReader`, `SentenceSplitter`) | Page-aware PDF loading and sentence-aware overlapping chunks |
+| Vector DB | Qdrant in Docker | Cosine similarity search over chunk embeddings with metadata payloads |
+| Registry | SQLite (stdlib) | Document list, status, chunk/page counts |
 | Agent | LangGraph (Phase 4) | Stateful, inspectable workflow with conditional routing |
 | Tools | MCP (Phase 5) | Standard protocol for exposing allowlisted local tools |
 | Frontend | React, TypeScript, Vite (Phase 3) | Chat, sources, agent activity, approvals |
@@ -100,7 +106,7 @@ Phase 1 implements the `FastAPI -> LLMProvider -> Ollama` path. See
 | --- | --- | --- |
 | 0 | Architecture and plan | Done |
 | 1 | FastAPI + Ollama chat, provider abstraction, prompt versioning, tests | Done |
-| 2 | Document ingestion (LlamaIndex) + Qdrant + basic RAG | Planned |
+| 2 | Document ingestion (LlamaIndex) + local embeddings + Qdrant + grounded RAG with citations | Done |
 | 3 | React frontend | Planned |
 | 4 | LangGraph agent | Planned |
 | 5 | MCP tools | Planned |
@@ -110,14 +116,19 @@ Phase 1 implements the `FastAPI -> LLMProvider -> Ollama` path. See
 
 ## Local setup
 
-Prerequisites: [Ollama](https://ollama.com) running on the host, [uv](https://docs.astral.sh/uv/).
+Prerequisites: [Ollama](https://ollama.com) running on the host, Docker Desktop,
+[uv](https://docs.astral.sh/uv/).
 
 ```powershell
 # Pull models (once)
 ollama pull qwen2.5:14b
+ollama pull nomic-embed-text
 
 # Configure
 copy .env.example .env
+
+# Vector database (persists to ./data/qdrant)
+docker compose up -d qdrant
 
 # Backend
 cd backend
@@ -125,65 +136,147 @@ uv sync
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-Open http://localhost:8000/docs for the interactive OpenAPI UI. If port 8000 is already in
-use on your machine, pass a different `--port` (the frontend's API base URL is configurable
-in Phase 3).
+Open http://localhost:8000/docs for the interactive OpenAPI UI and
+http://localhost:6333/dashboard for Qdrant's. If port 8000 is already in use on your
+machine, pass a different `--port` (the frontend's API base URL is configurable in Phase 3).
 
 ## API
 
 | Method | Path | Description |
 | --- | --- | --- |
-| GET | `/health` | Service status and Ollama reachability |
-| POST | `/chat` | Chat with the configured model (Phase 1: direct, no retrieval) |
+| GET | `/health` | Status of Ollama, the embedding model, Qdrant (chunk count) and the registry |
+| POST | `/documents/upload` | Multipart upload of a `.pdf`, `.txt` or `.md`; validates, chunks, embeds, indexes |
+| GET | `/documents` | List documents with status (`processing` / `ready` / `failed`) and counts |
+| GET | `/documents/{id}` | One document |
+| DELETE | `/documents/{id}` | Remove the document, its chunks in Qdrant and the stored file |
+| POST | `/chat` | Ask a question. `use_documents` (default `true`) grounds the answer in retrieved chunks |
 
 Example:
 
 ```powershell
+curl -X POST http://localhost:8000/documents/upload -F "file=@handbook.pdf"
+
 curl -X POST http://localhost:8000/chat -H "Content-Type: application/json" `
-  -d '{"message": "Explain what a vector database is in two sentences."}'
+  -d '{"message": "How many days of annual leave do employees get?"}'
 ```
 
-Response:
+Response (abridged):
 
 ```json
 {
-  "answer": "...",
+  "answer": "Full-time employees receive 27 days of paid annual leave per year [Source 1].",
+  "mode": "rag",
   "model": "qwen2.5:14b",
-  "prompt_version": "chat-system-v1",
-  "request_id": "7f3c...",
-  "latency_ms": 1834
+  "prompt_version": "rag-system-v1",
+  "request_id": "0cfeeb7d...",
+  "latency_ms": 2392,
+  "sources": [
+    {
+      "label": 1,
+      "document_name": "handbook.pdf",
+      "page": 4,
+      "score": 0.7489,
+      "snippet": "Full-time employees receive 27 days of paid annual leave per year, ...",
+      "cited": true
+    }
+  ],
+  "retrieval": { "retrieved_chunks": 4, "retrieval_ms": 296, "cited_sources": 1 }
 }
 ```
 
+When the documents do not cover the question the model is instructed to say so:
+
+> The uploaded documents do not contain enough information to answer this.
+> [General knowledge: The capital of Australia is Canberra.]
+
+## How RAG works here
+
+```
+upload  : file -> validate -> LlamaIndex PDFReader (per page) -> SentenceSplitter (400 tok, 60 overlap)
+          -> nomic-embed-text -> Qdrant upsert (vector + text + document/page payload) -> registry "ready"
+
+question: text -> nomic-embed-text -> Qdrant top-k by cosine -> "[Source N] file, page P <<< text >>>"
+          -> rag-system-v1 prompt -> qwen2.5:14b -> answer with [Source N] citations
+          -> API maps citations back to sources, flags which were actually cited
+```
+
+The grounding prompt (`rag-system-v1`) instructs the model to answer only from the excerpts,
+cite every statement, explicitly say when the documents are insufficient, and treat excerpt
+text as untrusted data (so instructions hidden inside a document are not followed).
+
+Full explanation: [docs/interview-notes/rag.md](docs/interview-notes/rag.md).
+
+## Where each framework is used
+
+| Concern | Tool | Why |
+| --- | --- | --- |
+| PDF loading with page numbers, sentence-aware chunking | LlamaIndex | Best-in-class for the data side; stops there so embed/store/search stay explicit |
+| LLM client, prompts, (later) tool definitions and structured output | LangChain | Standard interfaces; no chains or agent executors that would hide control flow |
+| Embeddings, vector store, retrieval, RAG pipeline | Our own code | Small, explicit, testable with fakes and Qdrant's in-memory mode |
+| Agent orchestration (Phase 4) | LangGraph | Explicit state machine with conditional routing and interrupts |
+
+Details: [LlamaIndex](docs/interview-notes/llamaindex.md),
+[embeddings](docs/interview-notes/embeddings.md),
+[Qdrant](docs/interview-notes/vector-databases-qdrant.md).
+
+## Security and privacy
+
+Highlights (full list in [docs/security.md](docs/security.md)):
+
+- Uploads: extension allowlist plus content sniffing (`%PDF-` magic, UTF-8 check), safe
+  filenames, server-generated storage paths, streaming size limit.
+- Prompt injection: retrieved text is delimited and declared untrusted; delimiter look-alikes
+  are neutralised; citation labels are server-assigned.
+- API: `extra="forbid"` schemas, bounded lengths, no `system` role from clients, validation
+  errors never echo input.
+- Logs: request IDs, timings, counts and model/prompt versions only; no message or document
+  content; secret-like keys redacted.
+- Everything stays on the machine: Ollama, Qdrant and files under `data/` (gitignored).
+
 ## Testing
 
-Unit tests never require a running LLM. The `LLMProvider` is swapped for a `FakeLLMProvider`
-through FastAPI dependency overrides.
+Tests never require Ollama or a Qdrant server. Through FastAPI dependency overrides the LLM
+becomes `FakeLLMProvider`, embeddings become a deterministic hashed-bag-of-words
+`FakeEmbeddingProvider`, and the vector store is the real `QdrantVectorStore` running Qdrant's
+in-process `:memory:` mode. PDFs for loader tests are generated by hand in `tests/helpers.py`.
 
 ```powershell
 cd backend
-uv run pytest
+uv run pytest            # 100+ tests, ~1 s
 uv run ruff check .
 uv run ruff format --check .
 ```
 
+Coverage by area: config, prompt registry and construction, upload validation and safe
+filenames, PDF/TXT/MD loading with page metadata, chunk size/overlap/IDs, SQLite registry,
+Qdrant upsert/search/delete/count, retriever timings, context building and citation
+extraction, the RAG pipeline, every API endpoint including error paths, and the Ollama
+providers with mocked HTTP.
+
 ## Project structure
 
 ```
+docker-compose.yml       Qdrant (backend + frontend services arrive in Phase 8)
 backend/
   app/
-    main.py            FastAPI app factory, middleware, routers
-    config.py          Settings from environment (pydantic-settings)
-    dependencies.py    Dependency-injection seams (LLM provider, settings)
-    api/               Routers: health, chat
-    schemas/           Pydantic request/response models
-    llm/               LLMProvider protocol, OllamaProvider, FakeLLMProvider
-    prompts/           Versioned system prompts + registry
-    observability/     Request-ID middleware, structured logging
+    main.py              FastAPI app factory, middleware, exception handlers, routers
+    config.py            Settings from environment (pydantic-settings)
+    dependencies.py      DI seams: LLM, embeddings, vector store, registry -> retriever, RAG, ingestion
+    api/                 Routers: health, chat, documents
+    schemas/             Pydantic request/response models
+    llm/                 LLMProvider protocol, OllamaProvider (ChatOllama), FakeLLMProvider
+    embeddings/          EmbeddingProvider protocol, LocalEmbeddingProvider (Ollama), fake
+    ingestion/           loaders (LlamaIndex PDFReader), chunking (SentenceSplitter), SQLite registry, service
+    retrieval/           VectorStore protocol, QdrantVectorStore, Retriever
+    rag/                 context builder (sources + delimiters), RAGPipeline
+    security/            upload validation, safe filenames
+    prompts/             versioned system prompts (chat-system-v1, rag-system-v1) + registry
+    observability/       request-ID middleware, structured JSON logging
   tests/
 docs/
-  architecture.md
-  interview-notes/     One page per technology, written as it is introduced
+  architecture.md  security.md
+  interview-notes/       One page per technology, written as it is introduced
+data/                    (gitignored) uploads/, qdrant/, registry.db
 ```
 
 ## Design decisions
@@ -197,10 +290,19 @@ docs/
   `X-Request-ID`), which is returned in the response header and body and attached to every
   log record for that request.
 - **Secrets and privacy.** All configuration comes from environment variables. User
-  messages and model outputs are not logged by default; only lengths and timings are.
+  messages, model outputs and document text are not logged; only lengths and timings are.
+- **Explicit retrieval pipeline.** LlamaIndex handles loading and chunking only. Embedding,
+  storage and search are our own small modules behind `EmbeddingProvider` and `VectorStore`
+  protocols, so every step is visible, testable and swappable.
+- **Chunk text lives in Qdrant payloads.** One round-trip returns everything needed for a
+  citation; deleting a document is a single filtered delete.
+- **Lazy, dimension-agnostic collection.** The Qdrant collection is created from the first
+  vector's length, and a mismatch (after changing embedding model) fails with a clear message
+  instead of corrupting search.
+- **Offline-safe chunking.** `SentenceSplitter` is given a cheap tokenizer and a regex
+  sentence splitter, so ingestion needs no tiktoken download or NLTK data at runtime.
 
-Full security and responsible-AI notes will be documented in `docs/security.md` and
-`docs/responsible-ai.md` as those features land.
+Security and privacy decisions are documented in [docs/security.md](docs/security.md).
 
 ## Interview notes
 
@@ -208,10 +310,14 @@ Short explainers for each technology, written as it enters the project:
 
 - [Ollama](docs/interview-notes/ollama.md)
 - [FastAPI](docs/interview-notes/fastapi.md)
+- [RAG](docs/interview-notes/rag.md)
+- [Embeddings](docs/interview-notes/embeddings.md)
+- [Vector databases and Qdrant](docs/interview-notes/vector-databases-qdrant.md)
+- [LlamaIndex](docs/interview-notes/llamaindex.md)
 
 ## Roadmap sections
 
-The following README sections will be filled in by later phases: RAG explanation, LangGraph
-workflow, LangChain role, LlamaIndex role, MCP explanation, vector database explanation,
-security decisions, human-in-the-loop design, LLMOps features, Docker setup, screenshots,
-CI/CD, limitations, future improvements, and an Azure mapping of each local component.
+The following README sections will be filled in by later phases: LangGraph workflow,
+LangChain role in depth, MCP explanation, human-in-the-loop design, LLMOps features and
+evaluation, Docker setup for all services, screenshots, CI/CD, limitations, future
+improvements, and an Azure mapping of each local component.

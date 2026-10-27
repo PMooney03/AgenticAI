@@ -9,7 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.api import chat, health
+from app.api import chat, documents, health
 from app.config import Settings, get_settings
 from app.observability import RequestContextMiddleware, configure_logging
 
@@ -23,7 +23,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         "app_started",
         extra={
             "model": settings.ollama_model,
+            "embedding_model": settings.embedding_model,
             "ollama_base_url": settings.ollama_base_url_str,
+            "qdrant_url": settings.qdrant_url,
             "log_level": settings.log_level,
         },
     )
@@ -68,8 +70,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "Local, agentic second brain. Phase 1: direct chat with an Ollama-served model "
-            "behind an LLM provider abstraction."
+            "Local, agentic second brain. Phase 2: upload PDF/TXT/Markdown documents, index "
+            "them in Qdrant with local embeddings, and ask grounded questions with sources."
         ),
         lifespan=_lifespan,
     )
@@ -81,6 +83,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(chat.router)
+    app.include_router(documents.router)
     return app
 
 

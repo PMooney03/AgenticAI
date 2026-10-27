@@ -28,10 +28,12 @@ flowchart TD
 | `LLMProvider` / `OllamaProvider` | Vendor-neutral chat completion and health check | Phase 1 |
 | Prompt registry | Versioned system prompts, version logged per request | Phase 1 |
 | Observability | JSON logs with request correlation; metrics and traces later | Phase 1 (base) |
-| LlamaIndex | Load PDF/TXT/MD with page metadata, overlapping chunking | Phase 2 *(planned)* |
-| `EmbeddingProvider` | Local embeddings via Ollama `nomic-embed-text` | Phase 2 *(planned)* |
-| Qdrant | Vector store: chunk id, text, document, page, metadata, vector | Phase 2 *(planned)* |
-| RAG pipeline | Embed question, retrieve, build grounded context, answer with sources | Phase 2 *(planned)* |
+| Upload security | Allowlist + content sniffing, safe filenames, streaming size cap | Phase 2 |
+| LlamaIndex | `PDFReader` per-page loading, `SentenceSplitter` overlapping chunks | Phase 2 |
+| `EmbeddingProvider` / `LocalEmbeddingProvider` | Local embeddings via Ollama `nomic-embed-text` | Phase 2 |
+| `VectorStore` / `QdrantVectorStore` | Points: chunk UUID, vector, payload (document, page, text, metadata) | Phase 2 |
+| `DocumentRegistry` | SQLite table of documents with status and counts | Phase 2 |
+| `Retriever` + `RAGPipeline` | Embed question, search, build cited context, answer with sources | Phase 2 |
 | React UI | Sidebar, chat, sources, agent activity, approvals | Phase 3 *(planned)* |
 | LangGraph | Stateful plan / act / evaluate loop with conditional routing | Phase 4 *(planned)* |
 | MCP server + client | Allowlisted local tools over a standard protocol | Phase 5 *(planned)* |
@@ -39,29 +41,67 @@ flowchart TD
 | Evaluation | Local dataset, retrieval and groundedness metrics | Phase 7 *(planned)* |
 | Docker Compose + CI | `frontend`, `backend`, `qdrant`; GitHub Actions lint/test/build | Phase 8 *(planned)* |
 
-## Request flow today (Phase 1)
+## Ingestion flow (Phase 2)
 
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant M as RequestContextMiddleware
-    participant R as /chat route
-    participant P as Prompt registry
-    participant L as OllamaProvider
-    participant O as Ollama
+    participant A as POST /documents/upload
+    participant S as IngestionService
+    participant V as validate_upload
+    participant L as LlamaIndex PDFReader / read_text
+    participant K as SentenceSplitter
+    participant E as LocalEmbeddingProvider
+    participant Q as QdrantVectorStore
+    participant R as DocumentRegistry
 
-    C->>M: POST /chat {message, history}
-    M->>M: assign request_id, start timer
-    M->>R: validated ChatRequest
-    R->>P: get_prompt("chat-system")
-    P-->>R: chat-system-v1
-    R->>L: chat([system, ...history, user])
-    L->>O: /api/chat via ChatOllama
-    O-->>L: assistant message + usage
-    L-->>R: LLMResult(content, model, latency, tokens)
-    R-->>M: ChatResponse(answer, model, prompt_version, request_id, latency_ms)
-    M-->>C: 200 + X-Request-ID header, JSON log line
+    C->>A: multipart file
+    A->>S: ingest(filename, stream)
+    S->>S: spool to data/uploads/<uuid>/upload.part (size cap enforced)
+    S->>V: name, size, first 4 KB
+    V-->>S: safe_name, content_type (or FileValidationError)
+    S->>R: create(status=processing)
+    S->>L: load_pages(path)
+    L-->>S: [LoadedPage(text, page)]
+    S->>K: chunk_pages(400 tokens, 60 overlap)
+    K-->>S: [Chunk(uuid5, document_id, page, text)]
+    S->>E: embed_documents(texts)  (search_document: prefix, batched)
+    E-->>S: vectors
+    S->>Q: upsert(chunks, vectors)
+    S->>R: mark_ready(chunk_count, page_count)
+    A-->>C: 201 DocumentResponse
 ```
+
+## Question flow (Phase 2, `use_documents=true`)
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as POST /chat
+    participant P as RAGPipeline
+    participant T as Retriever
+    participant E as LocalEmbeddingProvider
+    participant Q as QdrantVectorStore
+    participant X as build_context
+    participant L as OllamaProvider
+
+    C->>A: {message, history, top_k}
+    A->>P: answer(question, history)
+    P->>T: retrieve(question)
+    T->>E: embed_query (search_query: prefix)
+    T->>Q: search(vector, top_k, cosine)
+    Q-->>T: [RetrievedChunk(score, document, page, text)]
+    T-->>P: RetrievalResult(chunks, embedding_ms, search_ms)
+    P->>X: build_context(chunks)
+    X-->>P: "[Source N] file, page P <<< text >>>" + sources[]
+    P->>L: chat([rag-system-v1(context), ...history, question])
+    L-->>P: answer with [Source N] citations
+    P->>P: extract_citations -> cited labels
+    A-->>C: ChatResponse(answer, sources[cited flag], retrieval stats, prompt_version)
+```
+
+With `use_documents=false` the route skips retrieval and uses `chat-system-v1` (Phase 1
+behaviour).
 
 ## Target agent graph (Phase 4, planned)
 

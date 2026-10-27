@@ -14,6 +14,8 @@ def test_health_ok_when_llm_reachable(client: TestClient) -> None:
         "model": "test-model:latest",
         "base_url": "http://ollama.test:11434",
     }
+    assert body["embeddings"]["reachable"] is True
+    assert body["qdrant"]["reachable"] is True
 
 
 def test_health_degraded_when_llm_unreachable(

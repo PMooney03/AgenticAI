@@ -57,4 +57,4 @@ def list_prompts() -> list[PromptTemplate]:
 
 
 # Importing the version modules registers them. Kept at the bottom to avoid cycles.
-from app.prompts import chat_system_v1  # noqa: E402, F401
+from app.prompts import chat_system_v1, rag_system_v1  # noqa: E402, F401
