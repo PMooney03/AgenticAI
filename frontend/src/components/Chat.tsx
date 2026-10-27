@@ -112,7 +112,12 @@ export function Chat({
                 {message.retrieval
                   ? `${message.retrieval.retrieved_chunks} chunks · `
                   : ''}
-                {message.latencyMs} ms · {message.promptVersion}
+                {message.latencyMs} ms
+                {message.quality?.groundedness != null
+                  ? ` · grounded ${Math.round(message.quality.groundedness * 100)}%`
+                  : ''}
+                {message.quality?.refused ? ' · refused' : ''}
+                {message.promptVersion ? ` · ${message.promptVersion}` : ''}
               </p>
             ) : null}
           </article>

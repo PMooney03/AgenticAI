@@ -22,9 +22,9 @@ from app.notes.store import NoteError, NoteStore
 SERVER_NAME = "agentic-second-brain"
 
 
-def build_mcp_server(*, notes_path: Path | None = None) -> MCPServer:
+def build_mcp_server(*, notes_path: Path | str | None = None) -> MCPServer:
     server = MCPServer(SERVER_NAME)
-    store = NoteStore(notes_path or Path("data/notes.jsonl"))
+    store = NoteStore(Path(notes_path) if notes_path is not None else Path("data/notes.jsonl"))
 
     @server.tool(
         name="calculator",

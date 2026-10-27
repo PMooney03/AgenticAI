@@ -29,8 +29,8 @@ class Note:
 
 
 class NoteStore:
-    def __init__(self, path: Path) -> None:
-        self._path = path
+    def __init__(self, path: Path | str) -> None:
+        self._path = Path(path)
 
     def append(self, *, text: str, title: str = "") -> Note:
         body = text.strip()

@@ -9,6 +9,7 @@ from app.api.chat import (
     _RETRIEVAL_DOWN,
     _store_trace,
     chat_response_from_result,
+    record_agent_result,
 )
 from app.dependencies import AgentDep
 from app.embeddings import EmbeddingUnavailableError
@@ -90,12 +91,16 @@ async def agent_decision(
 
     response = chat_response_from_result(result, request_id)
     _store_trace(request, result, request_id)
+    record_agent_result(request, result, new=False)
+    request.app.state.metrics.observe_approval(approved=payload.approved)
     logger.info(
         "approval_resolved",
         extra={
             "approved": payload.approved,
             "tool": (result.tool_names or [None])[0],
             "pending": result.pending_approval is not None,
+            "citation_rate": result.citation_rate,
+            "groundedness": result.groundedness,
         },
     )
     return response

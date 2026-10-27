@@ -62,6 +62,12 @@ class RetrievalStats(BaseModel):
     cited_sources: int
 
 
+class QualityStats(BaseModel):
+    citation_rate: float | None = None
+    groundedness: float | None = None
+    refused: bool = False
+
+
 class PendingApproval(BaseModel):
     tool: str
     description: str
@@ -82,6 +88,7 @@ class ChatResponse(BaseModel):
     retrieval: RetrievalStats | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    quality: QualityStats | None = None
     workflow: list[WorkflowEvent] = Field(
         default_factory=list,
         description="High-level LangGraph steps. Never includes chain-of-thought.",

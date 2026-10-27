@@ -1,7 +1,7 @@
 # Architecture
 
 This document captures the target design and is updated as phases land. Sections marked
-*(planned)* describe components not yet implemented.
+*(planned)* describe components not yet implemented (Phase 8: Docker Compose + CI).
 
 ## Component map
 
@@ -17,7 +17,7 @@ flowchart TD
     Retriever --> Embed[EmbeddingProvider -> Ollama nomic-embed-text]
     Tools --> MCP[Local MCP server: allowlisted tools]
     LLM --> Ollama[Ollama qwen2.5:14b]
-    API --> Obs[Structured logs + metrics + trace store]
+    API --> Obs[Structured logs + metrics + golden-set eval]
 ```
 
 ## Responsibilities
@@ -27,7 +27,7 @@ flowchart TD
 | FastAPI | HTTP boundary, validation, error handling, request IDs | Phase 1 |
 | `LLMProvider` / `OllamaProvider` | Vendor-neutral chat completion and health check | Phase 1 |
 | Prompt registry | Versioned system prompts, version logged per request | Phase 1 |
-| Observability | JSON logs with request correlation; metrics and traces later | Phase 1 (base) |
+| Observability | JSON logs with request correlation; in-process metrics | Phase 1 (logs), Phase 7 (metrics) |
 | Upload security | Allowlist + content sniffing, safe filenames, streaming size cap | Phase 2 |
 | LlamaIndex | `PDFReader` per-page loading, `SentenceSplitter` overlapping chunks | Phase 2 |
 | `EmbeddingProvider` / `LocalEmbeddingProvider` | Local embeddings via Ollama `nomic-embed-text` | Phase 2 |
@@ -40,7 +40,7 @@ flowchart TD
 | Trace store | In-memory high-level steps keyed by request ID (no content) | Phase 4 |
 | MCP server + client | Allowlisted calculator + clock over official `mcp` SDK | Phase 5 |
 | Human-in-the-loop | `interrupt()` on `save_note`; `POST /agent/runs/{id}/decision` | Phase 6 |
-| Evaluation | Local dataset, retrieval and groundedness metrics | Phase 7 *(planned)* |
+| Evaluation | Golden set, citation rate, lexical groundedness, HITL checks | Phase 7 |
 | Docker Compose + CI | `frontend`, `backend`, `qdrant`; GitHub Actions lint/test/build | Phase 8 *(planned)* |
 
 ## Ingestion flow (Phase 2)
@@ -202,3 +202,20 @@ sequenceDiagram
   never for opaque chains or agent executors.
 - One LLM call per graph step and a hard step budget keep the agent inspectable.
 - No external databases beyond Qdrant; the document registry is SQLite.
+
+## LLMOps (Phase 7)
+
+```mermaid
+flowchart LR
+    Chat[POST /chat] --> Q[score_quality]
+    Q --> M[MetricsStore]
+    M --> G[GET /metrics]
+    Cases[Golden cases] --> R[run_golden_eval]
+    R --> E[POST /eval/run]
+```
+
+Online: every finished (or paused) agent run records latency, tokens, tools, citation
+rate and groundedness — never the answer text. Offline: the same graph runs against
+fakes on a pinned dataset (`python -m app.eval`). Retrieval hit and generation quality
+are separate checks.
+

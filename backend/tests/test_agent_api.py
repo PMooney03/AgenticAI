@@ -73,9 +73,7 @@ def test_chat_save_note_pauses_then_writes_on_approve(
     client: TestClient, fake_llm: FakeLLMProvider, settings
 ) -> None:
     fake_llm.replies = [PLAN_NOTE, "Saved to your notebook."]
-    paused = client.post(
-        "/chat", json={"message": "remember to buy milk", "use_documents": False}
-    )
+    paused = client.post("/chat", json={"message": "remember to buy milk", "use_documents": False})
     assert paused.status_code == 200, paused.text
     body = paused.json()
     pending = body["pending_approval"]
@@ -86,9 +84,7 @@ def test_chat_save_note_pauses_then_writes_on_approve(
     notes = settings.notes_path
     assert not notes.exists()
 
-    done = client.post(
-        f"/agent/runs/{body['request_id']}/decision", json={"approved": True}
-    )
+    done = client.post(f"/agent/runs/{body['request_id']}/decision", json={"approved": True})
     assert done.status_code == 200, done.text
     finished = done.json()
     assert finished["pending_approval"] is None
@@ -102,13 +98,9 @@ def test_chat_save_note_reject_does_not_write(
     client: TestClient, fake_llm: FakeLLMProvider, settings
 ) -> None:
     fake_llm.replies = [PLAN_NOTE, "Nothing was written."]
-    paused = client.post(
-        "/chat", json={"message": "remember to buy milk", "use_documents": False}
-    )
+    paused = client.post("/chat", json={"message": "remember to buy milk", "use_documents": False})
     body = paused.json()
-    done = client.post(
-        f"/agent/runs/{body['request_id']}/decision", json={"approved": False}
-    )
+    done = client.post(f"/agent/runs/{body['request_id']}/decision", json={"approved": False})
     assert done.status_code == 200, done.text
     assert any("Rejected" in step["label"] for step in done.json()["workflow"])
     assert not settings.notes_path.exists()

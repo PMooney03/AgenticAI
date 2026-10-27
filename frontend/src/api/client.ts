@@ -4,7 +4,9 @@ import type {
   ChatResponse,
   DocumentListResponse,
   DocumentRecord,
+  EvalReport,
   HealthResponse,
+  MetricsSnapshot,
   ToolListResponse,
 } from './types'
 
@@ -108,6 +110,9 @@ export function createClient(options: ClientOptions = {}) {
         method: 'POST',
         body: JSON.stringify({ approved }),
       }),
+    getMetrics: () => request<MetricsSnapshot>('/metrics'),
+    runEval: () => request<EvalReport>('/eval/run', { method: 'POST' }),
+    getLatestEval: () => request<EvalReport>('/eval/latest'),
   }
 }
 

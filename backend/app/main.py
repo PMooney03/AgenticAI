@@ -12,9 +12,10 @@ from fastapi.responses import JSONResponse
 from langgraph.checkpoint.memory import InMemorySaver
 
 from app.agent.trace import TraceStore
-from app.api import agent, chat, documents, health
+from app.api import agent, chat, documents, evaluation, health
+from app.api import metrics as metrics_api
 from app.config import Settings, get_settings
-from app.observability import RequestContextMiddleware, configure_logging
+from app.observability import MetricsStore, RequestContextMiddleware, configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -79,14 +80,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "Local, agentic second brain. Phase 6: a LangGraph agent retrieves, calls "
-            "allowlisted MCP tools, and pauses for human approval before any write."
+            "Local, agentic second brain. Phase 7: LangGraph retrieves, calls allowlisted "
+            "MCP tools, pauses writes for approval, and exposes metrics plus a golden-set eval."
         ),
         lifespan=_lifespan,
     )
     app.state.settings = settings
     app.state.traces = TraceStore()
     app.state.checkpointer = InMemorySaver()
+    app.state.metrics = MetricsStore()
+    app.state.last_eval = None
 
     app.add_middleware(RequestContextMiddleware)
     # CORS is added last so it is the outermost middleware (handles OPTIONS preflight).
@@ -105,6 +108,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(chat.router)
     app.include_router(documents.router)
     app.include_router(agent.router)
+    app.include_router(metrics_api.router)
+    app.include_router(evaluation.router)
     return app
 
 

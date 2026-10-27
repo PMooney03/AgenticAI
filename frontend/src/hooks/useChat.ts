@@ -1,7 +1,14 @@
 import { useCallback, useState } from 'react'
 
 import { ApiError, api } from '../api/client'
-import type { ChatMode, PendingApproval, RetrievalStats, Source, WorkflowEvent } from '../api/types'
+import type {
+  ChatMode,
+  PendingApproval,
+  QualityStats,
+  RetrievalStats,
+  Source,
+  WorkflowEvent,
+} from '../api/types'
 
 export interface ChatMessage {
   id: string
@@ -14,6 +21,7 @@ export interface ChatMessage {
   promptVersion?: string
   requestId?: string
   latencyMs?: number
+  quality?: QualityStats | null
   workflow?: WorkflowEvent[]
   pendingApproval?: PendingApproval | null
 }
@@ -67,6 +75,7 @@ export function useChat() {
           promptVersion: result.prompt_version,
           requestId: result.request_id,
           latencyMs: result.latency_ms,
+          quality: result.quality,
           workflow: result.workflow,
           pendingApproval: result.pending_approval,
         }
@@ -101,6 +110,7 @@ export function useChat() {
           model: result.model,
           promptVersion: result.prompt_version,
           latencyMs: result.latency_ms,
+          quality: result.quality,
           workflow: result.workflow,
           pendingApproval: result.pending_approval,
         }

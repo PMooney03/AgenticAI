@@ -36,6 +36,66 @@ export interface RetrievalStats {
   cited_sources: number
 }
 
+export interface QualityStats {
+  citation_rate: number | null
+  groundedness: number | null
+  refused: boolean
+}
+
+export interface LatencyStats {
+  count: number
+  avg_ms: number | null
+  p50_ms: number | null
+  p95_ms: number | null
+  max_ms: number | null
+}
+
+export interface MetricsSnapshot {
+  chats: number
+  chats_completed: number
+  chats_paused: number
+  chats_rag: number
+  chats_refused: number
+  http_requests: number
+  http_errors: number
+  tool_calls: number
+  approvals_approved: number
+  approvals_rejected: number
+  prompt_tokens: number
+  completion_tokens: number
+  llm: LatencyStats
+  retrieval: LatencyStats
+  citation_rate_avg: number | null
+  groundedness_avg: number | null
+  tools: Record<string, number>
+  routes: Record<string, number>
+}
+
+export interface EvalCaseResult {
+  id: string
+  passed: boolean
+  checks: Record<string, boolean>
+  failures: string[]
+  nodes_visited: string[]
+  tools: string[]
+  retrieved_chunks: number
+  cited_sources: number
+  citation_rate: number | null
+  groundedness: number | null
+  refused: boolean
+  pending: boolean
+  llm_ms: number
+}
+
+export interface EvalReport {
+  ran_at: string
+  total: number
+  passed: number
+  failed: number
+  duration_ms: number
+  cases: EvalCaseResult[]
+}
+
 export interface WorkflowEvent {
   id: string
   node: string
@@ -60,6 +120,7 @@ export interface ChatResponse {
   retrieval: RetrievalStats | null
   prompt_tokens: number | null
   completion_tokens: number | null
+  quality: QualityStats | null
   workflow: WorkflowEvent[]
   pending_approval: PendingApproval | null
 }

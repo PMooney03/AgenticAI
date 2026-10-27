@@ -95,6 +95,15 @@ Deleting a document removes it from all three.
   the question, the answer, chunk text, tool arguments or the planner's raw JSON.
 - Logs add node names, tool names and chunk counts; still no message bodies.
 
+## Metrics and evaluation (Phase 7)
+
+- `MetricsStore` keeps counts, latencies, token totals, tool names and quality *scores*.
+  It does not store questions, answers, chunk text or note bodies.
+- `GET /metrics` and `EvalReport` use the same rule. Golden cases exist in source as
+  fixtures; the HTTP report only returns case ids and check names.
+- Lexical groundedness is computed at request time from evidence already in graph state,
+  then discarded. Only the float is retained.
+
 ## Known gaps (to be addressed or documented in later phases)
 
 - No authentication: the API is intended for a single local user. Phase 8 documents how to

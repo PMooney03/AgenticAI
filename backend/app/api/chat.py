@@ -7,6 +7,7 @@ from app.agent.trace import TraceRecord
 from app.dependencies import AgentDep
 from app.embeddings import EmbeddingUnavailableError
 from app.llm import ChatMessage, LLMUnavailableError
+from app.observability.metrics import ChatObservation, MetricsStore
 from app.prompts import get_prompt
 from app.retrieval import VectorStoreUnavailableError
 from app.schemas.chat import (
@@ -14,6 +15,7 @@ from app.schemas.chat import (
     ChatResponse,
     ErrorResponse,
     PendingApproval,
+    QualityStats,
     RetrievalStats,
     SourceResponse,
     WorkflowEvent,
@@ -78,6 +80,7 @@ async def chat(payload: ChatRequest, request: Request, agent: AgentDep) -> ChatR
 
     response = chat_response_from_result(result, request_id)
     _store_trace(request, result, request_id)
+    record_agent_result(request, result, new=True)
     if result.pending_approval:
         logger.info(
             "chat_paused_for_approval",
@@ -102,9 +105,36 @@ async def chat(payload: ChatRequest, request: Request, agent: AgentDep) -> ChatR
                 "prompt_tokens": result.prompt_tokens,
                 "completion_tokens": result.completion_tokens,
                 "answer_chars": len(result.answer),
+                "citation_rate": result.citation_rate,
+                "groundedness": result.groundedness,
+                "refused": result.refused,
             },
         )
     return response
+
+
+def _metrics(request: Request) -> MetricsStore:
+    return request.app.state.metrics
+
+
+def record_agent_result(request: Request, result: AgentResult, *, new: bool) -> None:
+    _metrics(request).observe_chat(
+        ChatObservation(
+            mode=result.mode,
+            llm_ms=result.llm_ms,
+            retrieval_ms=result.retrieval_ms,
+            retrieved_chunks=result.retrieved_chunks,
+            cited_sources=len(result.cited_labels),
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            tools=result.tool_names,
+            paused=result.pending_approval is not None,
+            refused=result.refused,
+            citation_rate=result.citation_rate,
+            groundedness=result.groundedness,
+        ),
+        new=new,
+    )
 
 
 def _store_trace(request: Request, result: AgentResult, request_id: str) -> None:
@@ -170,5 +200,10 @@ def chat_response_from_result(result: AgentResult, request_id: str) -> ChatRespo
             )
             if result.pending_approval
             else None
+        ),
+        quality=QualityStats(
+            citation_rate=result.citation_rate,
+            groundedness=result.groundedness,
+            refused=result.refused,
         ),
     )

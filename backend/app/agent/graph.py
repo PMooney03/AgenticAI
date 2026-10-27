@@ -27,6 +27,7 @@ from app.agent.nodes import NodeFns
 from app.agent.routing import route_after_evaluate, route_after_plan
 from app.agent.state import AgentState, WorkflowStep, append_step, initial_state
 from app.agent.tools.policy import ToolRunner
+from app.eval.quality import score_quality
 from app.llm.base import LLMProvider
 from app.retrieval.retriever import Retriever
 
@@ -73,6 +74,9 @@ class AgentResult:
     tool_calls: list[dict] = field(default_factory=list)
     pending_approval: dict[str, str] | None = None
     thread_id: str = ""
+    citation_rate: float | None = None
+    groundedness: float | None = None
+    refused: bool = False
 
     @property
     def mode(self) -> Literal["rag", "chat"]:
@@ -161,20 +165,35 @@ class Agent:
                 done=False,
             )
         thread_id = str(config["configurable"]["thread_id"])
+        answer = str(values.get("answer") or "")
+        chunks = list(values.get("chunks") or [])
+        cited_labels = list(values.get("cited_labels") or [])
+        tool_calls = list(values.get("tool_results") or [])
+        evidence = [str(item.get("text") or "") for item in chunks]
+        evidence.extend(str(item.get("output") or "") for item in tool_calls)
+        quality = score_quality(
+            answer=answer,
+            retrieved_chunks=len(chunks),
+            cited_labels=cited_labels,
+            evidence_texts=evidence,
+        )
         return AgentResult(
-            answer=str(values.get("answer") or ""),
+            answer=answer,
             model=str(values.get("model") or self._llm.model_name),
             prompt_version=str(values.get("prompt_version") or ""),
             steps=steps,
             nodes_visited=list(values.get("nodes_visited") or []),
             sources=list(values.get("sources") or []),
-            cited_labels=list(values.get("cited_labels") or []),
-            retrieved_chunks=len(values.get("chunks") or []),
+            cited_labels=cited_labels,
+            retrieved_chunks=len(chunks),
             retrieval_ms=int(values.get("retrieval_ms") or 0),
             llm_ms=int(values.get("llm_ms") or 0),
             prompt_tokens=values.get("prompt_tokens"),
             completion_tokens=values.get("completion_tokens"),
-            tool_calls=list(values.get("tool_results") or []),
+            tool_calls=tool_calls,
             pending_approval=pending,
             thread_id=thread_id,
+            citation_rate=quality.citation_rate,
+            groundedness=quality.groundedness,
+            refused=quality.refused,
         )

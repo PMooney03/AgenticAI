@@ -62,4 +62,5 @@ were cited."
 - Retrieved text is untrusted input. A document can contain "ignore your instructions";
   the prompt and delimiters exist to resist that (prompt injection).
 - Evaluate retrieval and generation separately: did the right chunk come back, and did the
-  answer stick to it? (Phase 7 adds this.)
+  answer stick to it? Phase 7 does this with hit checks on a golden set plus citation rate
+  and lexical groundedness on live traffic.

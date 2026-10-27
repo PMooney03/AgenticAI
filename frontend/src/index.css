@@ -470,6 +470,59 @@ button.danger {
   }
 }
 
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.metric {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--bg-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.metric-value {
+  font-family: var(--mono);
+  font-size: 1.02rem;
+}
+
+.eval-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.eval-badge {
+  font-size: 0.75rem;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+}
+
+.eval-pass {
+  color: var(--green);
+  border-color: rgba(138, 170, 104, 0.5);
+}
+
+.eval-fail {
+  color: var(--red);
+  border-color: rgba(193, 106, 90, 0.45);
+}
+
 .approval {
   border: 1px solid rgba(224, 177, 74, 0.4);
   border-radius: 12px;

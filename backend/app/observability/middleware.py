@@ -45,11 +45,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     "duration_ms": int((time.perf_counter() - started) * 1000),
                 },
             )
+            metrics = getattr(request.app.state, "metrics", None)
+            if metrics is not None:
+                metrics.observe_http(method=request.method, path=request.url.path, status_code=500)
             raise
         finally:
             request_id_var.reset(token)
 
         response.headers[REQUEST_ID_HEADER] = request_id
+        duration_ms = int((time.perf_counter() - started) * 1000)
         logger.info(
             "request_completed",
             extra={
@@ -57,7 +61,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 "method": request.method,
                 "path": request.url.path,
                 "status_code": response.status_code,
-                "duration_ms": int((time.perf_counter() - started) * 1000),
+                "duration_ms": duration_ms,
             },
         )
+        metrics = getattr(request.app.state, "metrics", None)
+        if metrics is not None:
+            metrics.observe_http(
+                method=request.method, path=request.url.path, status_code=response.status_code
+            )
         return response

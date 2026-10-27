@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { AgentActivity } from './components/AgentActivity'
 import { ApprovalCard } from './components/ApprovalCard'
 import { Chat } from './components/Chat'
+import { MetricsPanel } from './components/MetricsPanel'
 import { Sidebar } from './components/Sidebar'
 import { SourcePanel } from './components/SourcePanel'
 import { useChat } from './hooks/useChat'
@@ -54,6 +55,7 @@ export default function App() {
           onSelect={setActiveLabel}
         />
         <AgentActivity events={events} />
+        <MetricsPanel />
         <ApprovalCard
           tool={chat.pendingApproval?.tool ?? null}
           description={chat.pendingApproval?.description ?? null}

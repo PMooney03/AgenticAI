@@ -60,6 +60,9 @@ async def test_graph_retrieves_then_answers(fake_embeddings: FakeEmbeddingProvid
     assert result.sources[0]["document_name"] == "handbook.pdf"
     assert result.cited_labels == [1]
     assert result.nodes_visited == ["plan", "retrieve", "evaluate", "generate_answer"]
+    assert result.refused is False
+    assert result.citation_rate is not None
+    assert result.groundedness is not None and result.groundedness > 0.5
     labels = [step["label"] for step in result.steps]
     assert labels[:2] == ["Analysed request", "Searched documents"]
     assert result.steps[-1]["label"] == "Generated response"

@@ -140,6 +140,55 @@ describe('createClient', () => {
     expect(result.pending_approval).toBeNull()
   })
 
+  it('fetches metrics and runs eval', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/metrics')) {
+        return new Response(
+          JSON.stringify({
+            chats: 1,
+            chats_completed: 1,
+            chats_paused: 0,
+            chats_rag: 1,
+            chats_refused: 0,
+            http_requests: 3,
+            http_errors: 0,
+            tool_calls: 0,
+            approvals_approved: 0,
+            approvals_rejected: 0,
+            prompt_tokens: 10,
+            completion_tokens: 4,
+            llm: { count: 1, avg_ms: 12, p50_ms: 12, p95_ms: 12, max_ms: 12 },
+            retrieval: { count: 1, avg_ms: 3, p50_ms: 3, p95_ms: 3, max_ms: 3 },
+            citation_rate_avg: 1,
+            groundedness_avg: 0.9,
+            tools: {},
+            routes: { 'GET /metrics': 1 },
+          }),
+          { status: 200 },
+        )
+      }
+      expect(url).toBe('http://api.test/eval/run')
+      expect(init?.method).toBe('POST')
+      return new Response(
+        JSON.stringify({
+          ran_at: '2026-10-27T16:00:00+00:00',
+          total: 6,
+          passed: 6,
+          failed: 0,
+          duration_ms: 20,
+          cases: [],
+        }),
+        { status: 200 },
+      )
+    })
+    const client = createClient({ baseUrl: 'http://api.test', fetch: fetchMock })
+    const metrics = await client.getMetrics()
+    expect(metrics.chats).toBe(1)
+    const report = await client.runEval()
+    expect(report.passed).toBe(6)
+  })
+
   it('uploads with multipart and no forced JSON content-type', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
       const headers = new Headers(init?.headers)
