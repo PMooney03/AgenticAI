@@ -9,6 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from langgraph.checkpoint.memory import InMemorySaver
 
 from app.agent.trace import TraceStore
 from app.api import agent, chat, documents, health
@@ -26,7 +27,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.mcp.windows import ensure_pywin32
 
     ensure_pywin32()
-    get_mcp_server()
+    get_mcp_server(str(settings.notes_path))
     logger.info(
         "app_started",
         extra={
@@ -78,14 +79,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "Local, agentic second brain. Phase 5: a LangGraph agent decides whether to "
-            "retrieve documents, call an allowlisted MCP tool, or answer, then returns "
-            "sources and a high-level workflow trace."
+            "Local, agentic second brain. Phase 6: a LangGraph agent retrieves, calls "
+            "allowlisted MCP tools, and pauses for human approval before any write."
         ),
         lifespan=_lifespan,
     )
     app.state.settings = settings
     app.state.traces = TraceStore()
+    app.state.checkpointer = InMemorySaver()
 
     app.add_middleware(RequestContextMiddleware)
     # CORS is added last so it is the outermost middleware (handles OPTIONS preflight).

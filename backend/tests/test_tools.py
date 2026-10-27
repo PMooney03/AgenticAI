@@ -28,13 +28,14 @@ def test_calculator_rejects_unsafe_expressions() -> None:
         calculate("10 ** 99")
 
 
-def test_allowlist_exposes_calculator_and_clock() -> None:
-    names = [spec.name for spec in list_tools()]
-    assert names == ["calculator", "clock"]
-    for spec in list_tools():
-        assert spec.read_only is True
-        assert spec.requires_approval is False
-        assert spec.source == "mcp"
+def test_allowlist_exposes_read_only_and_write_tools() -> None:
+    by_name = {spec.name: spec for spec in list_tools()}
+    assert set(by_name) == {"calculator", "clock", "save_note"}
+    assert by_name["calculator"].read_only is True
+    assert by_name["calculator"].requires_approval is False
+    assert by_name["save_note"].read_only is False
+    assert by_name["save_note"].requires_approval is True
+    assert all(spec.source == "mcp" for spec in by_name.values())
 
 
 async def test_execute_tool_goes_through_mcp_and_rejects_unknown() -> None:

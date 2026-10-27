@@ -13,6 +13,7 @@ from app.schemas.chat import (
     ChatRequest,
     ChatResponse,
     ErrorResponse,
+    PendingApproval,
     RetrievalStats,
     SourceResponse,
     WorkflowEvent,
@@ -66,6 +67,7 @@ async def chat(payload: ChatRequest, request: Request, agent: AgentDep) -> ChatR
             history=[{"role": m.role, "content": m.content} for m in payload.history],
             use_documents=payload.use_documents,
             top_k=payload.top_k,
+            thread_id=request_id,
         )
     except LLMUnavailableError as exc:
         logger.error("chat_llm_unavailable", extra={"error": str(exc)})
@@ -74,7 +76,38 @@ async def chat(payload: ChatRequest, request: Request, agent: AgentDep) -> ChatR
         logger.error("chat_retrieval_unavailable", extra={"error": str(exc)})
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=_RETRIEVAL_DOWN) from exc
 
-    response = _to_response(result, request_id)
+    response = chat_response_from_result(result, request_id)
+    _store_trace(request, result, request_id)
+    if result.pending_approval:
+        logger.info(
+            "chat_paused_for_approval",
+            extra={
+                "tool": result.pending_approval.get("tool"),
+                "preview_chars": len(result.pending_approval.get("preview") or ""),
+                "nodes": result.nodes_visited,
+            },
+        )
+    else:
+        logger.info(
+            "chat_completed",
+            extra={
+                "mode": response.mode,
+                "model": result.model,
+                "prompt_version": result.prompt_version,
+                "nodes": result.nodes_visited,
+                "retrieved_chunks": result.retrieved_chunks,
+                "tools": result.tool_names,
+                "llm_latency_ms": result.llm_ms,
+                "retrieval_ms": result.retrieval_ms,
+                "prompt_tokens": result.prompt_tokens,
+                "completion_tokens": result.completion_tokens,
+                "answer_chars": len(result.answer),
+            },
+        )
+    return response
+
+
+def _store_trace(request: Request, result: AgentResult, request_id: str) -> None:
     request.app.state.traces.put(
         TraceRecord(
             request_id=request_id,
@@ -86,26 +119,9 @@ async def chat(payload: ChatRequest, request: Request, agent: AgentDep) -> ChatR
             model=result.model,
         )
     )
-    logger.info(
-        "chat_completed",
-        extra={
-            "mode": response.mode,
-            "model": result.model,
-            "prompt_version": result.prompt_version,
-            "nodes": result.nodes_visited,
-            "retrieved_chunks": result.retrieved_chunks,
-            "tools": result.tool_names,
-            "llm_latency_ms": result.llm_ms,
-            "retrieval_ms": result.retrieval_ms,
-            "prompt_tokens": result.prompt_tokens,
-            "completion_tokens": result.completion_tokens,
-            "answer_chars": len(result.answer),
-        },
-    )
-    return response
 
 
-def _to_response(result: AgentResult, request_id: str) -> ChatResponse:
+def chat_response_from_result(result: AgentResult, request_id: str) -> ChatResponse:
     cited = set(result.cited_labels)
     return ChatResponse(
         answer=result.answer,
@@ -146,4 +162,13 @@ def _to_response(result: AgentResult, request_id: str) -> ChatResponse:
             )
             for step in result.steps
         ],
+        pending_approval=(
+            PendingApproval(
+                tool=result.pending_approval["tool"],
+                description=result.pending_approval.get("description") or "",
+                preview=result.pending_approval.get("preview") or "",
+            )
+            if result.pending_approval
+            else None
+        ),
     )

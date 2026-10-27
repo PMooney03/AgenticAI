@@ -164,7 +164,8 @@ h2 {
 }
 
 .upload-btn:disabled,
-.composer button:disabled {
+.composer button:disabled,
+.approval button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -479,6 +480,18 @@ button.danger {
 .approval-actions {
   display: flex;
   gap: 8px;
+}
+
+.approval-preview {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  max-height: 8rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 8px;
 }
 
 @media (max-width: 1100px) {

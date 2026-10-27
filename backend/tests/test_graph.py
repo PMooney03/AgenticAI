@@ -1,7 +1,11 @@
+from pathlib import Path
+
 from app.agent import Agent
 from app.embeddings import FakeEmbeddingProvider
 from app.ingestion.chunking import Chunk
 from app.llm import FakeLLMProvider
+from app.mcp.client import InProcessMCPClient
+from app.mcp.server import build_mcp_server
 from app.retrieval import QdrantVectorStore, Retriever
 
 PLAN_RETRIEVE = '{"action": "retrieve", "tool_name": null, "tool_args": {}}'
@@ -10,17 +14,28 @@ PLAN_TOOL = (
 )
 PLAN_ANSWER = '{"action": "answer", "tool_name": null, "tool_args": {}}'
 PLAN_CLOCK = '{"action": "tool", "tool_name": "clock", "tool_args": {}}'
+PLAN_NOTE = (
+    '{"action": "tool", "tool_name": "save_note", '
+    '"tool_args": {"text": "Buy milk", "title": "todo"}}'
+)
 
 
 async def _agent(
-    llm: FakeLLMProvider, embeddings: FakeEmbeddingProvider, *, chunks: list[Chunk] | None = None
+    llm: FakeLLMProvider,
+    embeddings: FakeEmbeddingProvider,
+    *,
+    chunks: list[Chunk] | None = None,
+    notes_path: Path | None = None,
 ) -> Agent:
     store = QdrantVectorStore(location=":memory:", collection="agent")
     if chunks:
         vectors = await embeddings.embed_documents([chunk.text for chunk in chunks])
         await store.upsert(chunks, vectors)
     retriever = Retriever(embeddings=embeddings, store=store, default_top_k=2)
-    return Agent(llm=llm, retriever=retriever, max_steps=3)
+    tools = None
+    if notes_path is not None:
+        tools = InProcessMCPClient(build_mcp_server(notes_path=notes_path))
+    return Agent(llm=llm, retriever=retriever, tools=tools, max_steps=3)
 
 
 def _chunk() -> Chunk:
@@ -104,6 +119,43 @@ async def test_graph_clamps_retrieve_when_documents_disabled(
     assert "retrieve" not in result.nodes_visited
     assert result.retrieved_chunks == 0
     assert result.nodes_visited == ["plan", "generate_answer"]
+
+
+async def test_graph_save_note_interrupts_until_approved(
+    fake_embeddings: FakeEmbeddingProvider, tmp_path: Path
+) -> None:
+    notes = tmp_path / "notes.jsonl"
+    llm = FakeLLMProvider(replies=[PLAN_NOTE, "Saved."])
+    agent = await _agent(llm, fake_embeddings, notes_path=notes)
+
+    paused = await agent.run(
+        question="remember to buy milk", history=[], use_documents=False, thread_id="hitl"
+    )
+    assert paused.pending_approval is not None
+    assert paused.pending_approval["tool"] == "save_note"
+    assert paused.tool_names == []
+    assert not notes.exists()
+
+    done = await agent.resume("hitl", approved=True)
+    assert done.pending_approval is None
+    assert done.tool_names == ["save_note"]
+    assert done.tool_calls[0]["ok"] == "true"
+    assert "Saved note" in done.tool_calls[0]["output"]
+    assert "Buy milk" in notes.read_text(encoding="utf-8")
+
+
+async def test_graph_save_note_reject_skips_write(
+    fake_embeddings: FakeEmbeddingProvider, tmp_path: Path
+) -> None:
+    notes = tmp_path / "notes.jsonl"
+    llm = FakeLLMProvider(replies=[PLAN_NOTE, "Not saved."])
+    agent = await _agent(llm, fake_embeddings, notes_path=notes)
+
+    await agent.run(question="remember this", history=[], use_documents=False, thread_id="nope")
+    done = await agent.resume("nope", approved=False)
+    assert done.tool_calls[0]["ok"] == "false"
+    assert "rejected" in done.tool_calls[0]["output"].lower()
+    assert not notes.exists()
 
 
 async def test_graph_garbled_plan_retrieves_when_documents_on(

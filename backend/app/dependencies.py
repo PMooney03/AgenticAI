@@ -11,7 +11,8 @@ Leaf singletons are cached per unique configuration so HTTP clients are reused.
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
+from langgraph.checkpoint.memory import InMemorySaver
 
 from app.config import Settings, get_settings
 from app.embeddings import EmbeddingProvider, LocalEmbeddingProvider
@@ -111,7 +112,19 @@ def get_rag_pipeline(retriever: RetrieverDep, llm: LLMProviderDep) -> RAGPipelin
 RAGPipelineDep = Annotated[RAGPipeline, Depends(get_rag_pipeline)]
 
 
-async def get_agent(settings: SettingsDep, retriever: RetrieverDep, llm: LLMProviderDep):
+def get_checkpointer(request: Request) -> InMemorySaver:
+    return request.app.state.checkpointer
+
+
+CheckpointerDep = Annotated[InMemorySaver, Depends(get_checkpointer)]
+
+
+async def get_agent(
+    settings: SettingsDep,
+    retriever: RetrieverDep,
+    llm: LLMProviderDep,
+    checkpointer: CheckpointerDep,
+):
     # Imported here so retrieval/RAG finish loading before the graph (avoids a cycle).
     # Async so FastAPI does not run this in a threadpool — the first MCP import must
     # happen on the event-loop thread (Windows pywin32).
@@ -122,7 +135,8 @@ async def get_agent(settings: SettingsDep, retriever: RetrieverDep, llm: LLMProv
     return Agent(
         llm=llm,
         retriever=retriever,
-        tools=InProcessMCPClient(get_mcp_server()),
+        tools=InProcessMCPClient(get_mcp_server(str(settings.notes_path))),
+        checkpointer=checkpointer,
         max_steps=settings.agent_max_steps,
     )
 

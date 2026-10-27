@@ -62,6 +62,15 @@ class RetrievalStats(BaseModel):
     cited_sources: int
 
 
+class PendingApproval(BaseModel):
+    tool: str
+    description: str
+    preview: str = Field(
+        default="",
+        description="Human-visible proposal (e.g. note text). Not stored in traces.",
+    )
+
+
 class ChatResponse(BaseModel):
     answer: str
     mode: ChatMode
@@ -77,6 +86,7 @@ class ChatResponse(BaseModel):
         default_factory=list,
         description="High-level LangGraph steps. Never includes chain-of-thought.",
     )
+    pending_approval: PendingApproval | None = None
 
 
 class ErrorResponse(BaseModel):

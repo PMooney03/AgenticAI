@@ -46,20 +46,22 @@ planner JSON {action: tool, tool_name, tool_args}
   -> text result back into LangGraph state
 ```
 
-- `app/mcp/server.py` - `MCPServer("agentic-second-brain")` with two read-only tools.
+- `app/mcp/server.py` - `MCPServer("agentic-second-brain")` with calculator, clock, and
+  `save_note` (write; gated by LangGraph approval).
 - `app/mcp/client.py` - `InProcessMCPClient` uses `async with Client(server)`.
 - `python -m app.mcp` - the same server over stdio, so you can attach an external MCP
   inspector or a future subprocess client.
 - Calculator errors become MCP `is_error` (`ToolError`); the graph records the message
-  and still answers. There is no shell tool. Write tools wait for Phase 6 approval.
+  and still answers. There is no shell tool. `save_note` is the write tool; the graph
+  interrupts before `tools/call`.
 
 ## How I would explain it in an interview
 
 "MCP is how the agent uses tools without owning their implementations. I run a local
-MCP server with an allowlist — calculator and a clock today, both read-only. The
-LangGraph `call_tool` node goes through an MCP client, not a Python import. In the
-FastAPI process I use the SDK's in-memory transport so tests and the app speak real
-MCP without a second process; `python -m app.mcp` is the stdio form of the same
+MCP server with an allowlist — calculator and clock are read-only; save_note writes
+to a JSONL notebook but only after LangGraph interrupts for approval. The
+`call_tool` node goes through an MCP client, not a Python import. In FastAPI I use
+the SDK's in-memory transport; `python -m app.mcp` is the stdio form of the same
 server. The planner still cannot invent a tool name."
 
 ## Gotchas worth mentioning
@@ -69,8 +71,8 @@ server. The planner still cannot invent a tool name."
 - In-memory `Client(server)` is real MCP, not a fake. Stdio is the same handlers with
   a different transport.
 - Tool results are untrusted data in the answer prompt, same as retrieved chunks.
-- `requires_approval` is already on the tool spec; Phase 6 will interrupt before
-  anything that changes state actually runs.
+- `requires_approval` on the tool spec is the graph's cue to `interrupt()` before
+  `tools/call`. The MCP handler itself still writes if invoked; the interrupt is the gate.
 - On Windows the SDK's stdio module imports `pywintypes`. We add
   `pywin32_system32` to the DLL search path and import MCP during FastAPI startup
   on the main thread, because the first import inside a dependency threadpool

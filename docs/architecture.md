@@ -39,7 +39,7 @@ flowchart TD
 | LangGraph | Stateful plan / retrieve / tool / evaluate loop with conditional routing | Phase 4 |
 | Trace store | In-memory high-level steps keyed by request ID (no content) | Phase 4 |
 | MCP server + client | Allowlisted calculator + clock over official `mcp` SDK | Phase 5 |
-| Human-in-the-loop | `interrupt()` on state-changing tools, approve/reject endpoint | Phase 6 *(planned)* |
+| Human-in-the-loop | `interrupt()` on `save_note`; `POST /agent/runs/{id}/decision` | Phase 6 |
 | Evaluation | Local dataset, retrieval and groundedness metrics | Phase 7 *(planned)* |
 | Docker Compose + CI | `frontend`, `backend`, `qdrant`; GitHub Actions lint/test/build | Phase 8 *(planned)* |
 
@@ -146,7 +146,7 @@ flowchart TD
 
 State carried through the graph: `question`, `history`, `steps[]` (high-level trace shown
 to the user), `chunks[]`, `tool_results[]`, `step_count`, `answer`, `sources`.
-Human-approval interrupts (`pending_approval`) arrive in Phase 6.
+`save_note` calls `interrupt()`; `ChatResponse.pending_approval` carries the proposal.
 
 ## Tool calls (Phase 5)
 
@@ -167,6 +167,32 @@ sequenceDiagram
 
 Default transport is in-process (`Client(server)`). `python -m app.mcp` serves the same
 tools over stdio.
+
+## Human approval (Phase 6)
+
+```mermaid
+sequenceDiagram
+    participant U as UI
+    participant C as POST /chat
+    participant G as call_tool
+    participant I as interrupt
+    participant D as POST /agent/runs/id/decision
+    participant S as save_note MCP
+
+    U->>C: remember to buy milk
+    C->>G: tool_name=save_note
+    G->>I: pause (no write)
+    C-->>U: pending_approval + preview
+    U->>D: approved true or false
+    alt approve
+        D->>G: Command(resume=approve)
+        G->>S: tools/call
+        S-->>G: Saved note id
+    else reject
+        D->>G: Command(resume=reject)
+        G-->>D: rejected, disk unchanged
+    end
+```
 
 ## Guiding simplifications
 

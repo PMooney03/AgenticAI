@@ -44,7 +44,8 @@ collapsible activity panel in sync. Components plus typed API calls do.
 - `SourcePanel` - filename, page, cosine score, cited vs retrieved, expandable snippet.
 - `AgentActivity` - renders `ChatResponse.workflow` from the LangGraph run and lists
   allowlisted tools from `GET /agent/tools`. Hidden chain-of-thought is never shown.
-- `ApprovalCard` - present but unused until Phase 6.
+- `ApprovalCard` - shown when `ChatResponse.pending_approval` is set; Approve/Reject
+  call `POST /agent/runs/{id}/decision`.
 - CORS on the backend (`CORS_ORIGINS`) plus `VITE_API_BASE_URL` so the UI can talk to
   whatever port the API is on.
 

@@ -10,9 +10,11 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from langgraph.types import interrupt
+
 from app.agent.routing import decide_plan
 from app.agent.state import AgentState, WorkflowStep, append_step
-from app.agent.tools.policy import TOOLS, ToolRunner, execute_tool, list_tools
+from app.agent.tools.policy import TOOLS, ToolRunner, describe_approval, execute_tool, list_tools
 from app.llm.base import ChatMessage, LLMProvider, LLMResult
 from app.prompts import get_prompt
 from app.rag.context import build_context
@@ -131,13 +133,22 @@ class NodeFns:
         name = state.get("tool_name") or ""
         args = state.get("tool_args") or {}
         spec = TOOLS.get(name)
-        try:
-            output = await execute_tool(name, args, client=self.mcp)
-            ok = True
-        except ValueError as exc:
-            output = str(exc)
+        approved = True
+        if spec is not None and spec.requires_approval:
+            decision = interrupt(describe_approval(name, args))
+            approved = decision == "approve"
+        if approved:
+            try:
+                output = await execute_tool(name, args, client=self.mcp)
+                ok = True
+            except ValueError as exc:
+                output = str(exc)
+                ok = False
+            label = f"Used {name} tool" if spec else "Rejected unknown tool"
+        else:
+            output = "The user rejected this write."
             ok = False
-        label = f"Used {name} tool" if spec else "Rejected unknown tool"
+            label = f"Rejected {name} tool" if spec else "Rejected unknown tool"
         results = list(state.get("tool_results") or [])
         results.append(
             {

@@ -5,8 +5,8 @@ traditional RAG "second brain" into a LangGraph-driven agent that decides when t
 documents, when to call tools (via MCP), and when to keep reasoning through a multi-step
 workflow, with human approval for anything that changes state.
 
-> Status: **Phase 5 complete** - the LangGraph agent calls allowlisted tools over MCP
-> (calculator and clock). The UI shows the real high-level workflow trace.
+> Status: **Phase 6 complete** - writes pause for human approval. `save_note` is an MCP
+> tool gated by a LangGraph interrupt; the UI ApprovalCard resumes the same graph thread.
 > See [Build phases](#build-phases) for what comes next.
 
 ## Table of contents
@@ -110,7 +110,7 @@ data flow.
 | 3 | React frontend (upload, chat, sources, activity placeholder) | Done |
 | 4 | LangGraph agent | Done |
 | 5 | MCP tools | Done |
-| 6 | Human-in-the-loop approval | Planned |
+| 6 | Human-in-the-loop approval | Done |
 | 7 | Logging, metrics, evaluation (LLMOps) | Planned |
 | 8 | Docker Compose + CI/CD hardening | Planned |
 
@@ -157,8 +157,9 @@ backend with `--port 8010` and set `VITE_API_BASE_URL=http://localhost:8010` in
 | GET | `/documents/{id}` | One document |
 | DELETE | `/documents/{id}` | Remove the document, its chunks in Qdrant and the stored file |
 | POST | `/chat` | Ask a question. LangGraph plans retrieve / tool / answer. `use_documents` (default `true`) allows retrieval |
-| GET | `/agent/tools` | Allowlisted MCP tools (`calculator`, `clock`) |
+| GET | `/agent/tools` | Allowlisted MCP tools (`calculator`, `clock`, `save_note`) |
 | GET | `/agent/trace/{request_id}` | High-level nodes and labels for a recent chat (no content) |
+| POST | `/agent/runs/{request_id}/decision` | Approve or reject a pending `save_note` (`{"approved": true}`) |
 
 Example:
 
@@ -214,6 +215,7 @@ upload  : file -> validate -> LlamaIndex PDFReader (per page) -> SentenceSplitte
 question: LangGraph plan -> (retrieve | MCP tool | answer)
           retrieve: nomic-embed-text -> Qdrant top-k -> rag-system-v1 -> cited answer
           calculator / clock: MCP tools/call -> agent-answer-v1
+          save_note: interrupt -> human approve/reject -> MCP write to notes.jsonl
           answer: chat-system-v1 when no retrieval was needed
 ```
 
@@ -270,11 +272,11 @@ npm run build
 ```
 
 Backend coverage: config, prompt registry, upload validation, loaders, chunking, registry,
-Qdrant, retriever, RAG pipeline, LangGraph routing/tools/graph, CORS, every API endpoint,
-mocked Ollama/embeddings.
+Qdrant, retriever, RAG pipeline, LangGraph routing/tools/graph/interrupts, MCP, notes,
+CORS, every API endpoint, mocked Ollama/embeddings.
 
-Frontend coverage: API client (request IDs, multipart upload, error parsing, tools),
-citation splitting, source panel and agent-activity rendering of graph events.
+Frontend coverage: API client (request IDs, multipart upload, error parsing, tools,
+approval decisions), citation splitting, source panel, agent-activity, ApprovalCard.
 
 ## Project structure
 
@@ -292,8 +294,9 @@ backend/
     ingestion/           loaders (LlamaIndex PDFReader), chunking (SentenceSplitter), SQLite registry, service
     retrieval/           VectorStore protocol, QdrantVectorStore, Retriever
     rag/                 context builder (sources + delimiters), RAGPipeline
-    agent/               LangGraph state, nodes, routing, tool allowlist, in-memory traces
-    mcp/                 MCPServer (calculator, clock) + in-process Client; `python -m app.mcp` for stdio
+    agent/               LangGraph state, nodes, routing, tool allowlist, interrupts, traces
+    mcp/                 MCPServer (calculator, clock, save_note) + in-process Client
+    notes/               JSONL notebook written only after approval
     security/            upload validation, safe filenames
     prompts/             versioned prompts (chat, rag, agent-planner, agent-answer) + registry
     observability/       request-ID middleware, structured JSON logging
@@ -338,6 +341,9 @@ data/                    (gitignored) uploads/, qdrant/, registry.db
   LLM call), and the UI only sees high-level step labels.
 - **MCP for tools.** The graph names an allowlisted tool; an MCP client calls the local
   server. FastAPI uses the SDK in-memory transport; `python -m app.mcp` is stdio.
+- **Human approval for writes.** `save_note` is `requires_approval`. LangGraph
+  `interrupt()` checkpoints the run; the UI shows the proposed note; only `approved: true`
+  resumes into MCP. Reject never touches `data/notes.jsonl`.
 
 Security and privacy decisions are documented in [docs/security.md](docs/security.md).
 
@@ -354,13 +360,25 @@ Short explainers for each technology, written as it enters the project:
 - [React and Vite](docs/interview-notes/react-vite.md)
 - [LangGraph](docs/interview-notes/langgraph.md)
 - [MCP](docs/interview-notes/mcp.md)
+- [Human-in-the-loop](docs/interview-notes/hitl.md)
 
 ## Roadmap sections
 
 The following README sections will be filled in by later phases: LangChain role in depth,
-human-in-the-loop design, LLMOps features and evaluation, Docker setup
+LLMOps features and evaluation, Docker setup
 for all services, screenshots, CI/CD, limitations, future improvements, and an Azure
 mapping of each local component.
+
+## Human-in-the-loop
+
+Read-only tools (calculator, clock) run in the `call_tool` node immediately. `save_note`
+writes a JSON line to `data/notes.jsonl`, so the node calls LangGraph `interrupt()` first.
+`POST /chat` then returns `pending_approval` (tool name, description, preview) instead of a
+finished answer. Approve or reject with `POST /agent/runs/{request_id}/decision`. The
+graph resumes on the same thread id; MCP runs only after approve. Traces keep labels, not
+the note text.
+
+Full write-up: [docs/interview-notes/hitl.md](docs/interview-notes/hitl.md).
 
 ## Screenshots
 

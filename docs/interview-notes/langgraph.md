@@ -17,8 +17,8 @@ model says it is done. Every branch is code you can draw on a whiteboard.
   that better than a prompt-only ReAct loop.
 - Conditional edges keep routing in Python (`route_after_plan`, `route_after_evaluate`),
   which is unit-testable without an LLM.
-- The same graph later grows interrupts for human approval (Phase 6) without rewriting
-  the chat route.
+- The same graph grows interrupts for human approval without rewriting the chat route:
+  `save_note` calls `interrupt()`; resume uses `Command` on the chat `request_id`.
 
 ## What problem it solves
 
@@ -58,8 +58,8 @@ START -> plan
   Evaluate is a heuristic (evidence present? both actions tried? budget hit?), not another
   LLM call.
 - `app/agent/graph.py` - `StateGraph` compile + `Agent.run()`.
-- `app/agent/tools/` - allowlist (`calculator`, `clock`). Execution is MCP
-  (`app/mcp/`), not a Python import inside the graph.
+- `app/agent/tools/` - allowlist (`calculator`, `clock`, `save_note`). Execution is MCP
+  (`app/mcp/`), not a Python import inside the graph. `save_note` interrupts first.
 - `POST /chat` always runs the graph. `GET /agent/tools` lists the allowlist.
   `GET /agent/trace/{request_id}` returns nodes, labels, tool names and chunk counts —
   never questions, answers, document text or planner JSON.

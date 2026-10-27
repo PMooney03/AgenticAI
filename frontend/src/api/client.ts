@@ -103,6 +103,11 @@ export function createClient(options: ClientOptions = {}) {
         }),
       }),
     listTools: () => request<ToolListResponse>('/agent/tools'),
+    decideRun: (requestId: string, approved: boolean) =>
+      request<ChatResponse>(`/agent/runs/${encodeURIComponent(requestId)}/decision`, {
+        method: 'POST',
+        body: JSON.stringify({ approved }),
+      }),
   }
 }
 

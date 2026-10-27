@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 
 import { ApiError, api } from '../api/client'
-import type { ChatMode, RetrievalStats, Source, WorkflowEvent } from '../api/types'
+import type { ChatMode, PendingApproval, RetrievalStats, Source, WorkflowEvent } from '../api/types'
 
 export interface ChatMessage {
   id: string
@@ -15,6 +15,7 @@ export interface ChatMessage {
   requestId?: string
   latencyMs?: number
   workflow?: WorkflowEvent[]
+  pendingApproval?: PendingApproval | null
 }
 
 function nextId(): string {
@@ -56,7 +57,9 @@ export function useChat() {
         const assistant: ChatMessage = {
           id: nextId(),
           role: 'assistant',
-          content: result.answer,
+          content: result.pending_approval
+            ? 'Waiting for you to approve a write to the local notebook.'
+            : result.answer,
           mode: result.mode,
           sources: result.sources,
           retrieval: result.retrieval,
@@ -65,6 +68,7 @@ export function useChat() {
           requestId: result.request_id,
           latencyMs: result.latency_ms,
           workflow: result.workflow,
+          pendingApproval: result.pending_approval,
         }
         setMessages((current) => [...current, assistant])
         setSelectedId(assistant.id)
@@ -76,6 +80,40 @@ export function useChat() {
       }
     },
     [messages, sending, useDocuments],
+  )
+
+  const decide = useCallback(
+    async (approved: boolean) => {
+      const pending = [...messages].reverse().find((message) => message.pendingApproval)
+      if (!pending?.requestId || sending) {
+        return
+      }
+      setSending(true)
+      setError(null)
+      try {
+        const result = await api.decideRun(pending.requestId, approved)
+        const updated: ChatMessage = {
+          ...pending,
+          content: result.answer,
+          mode: result.mode,
+          sources: result.sources,
+          retrieval: result.retrieval,
+          model: result.model,
+          promptVersion: result.prompt_version,
+          latencyMs: result.latency_ms,
+          workflow: result.workflow,
+          pendingApproval: result.pending_approval,
+        }
+        setMessages((current) => current.map((message) => (message.id === pending.id ? updated : message)))
+        setSelectedId(updated.id)
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : 'Approval request failed.'
+        setError(message)
+      } finally {
+        setSending(false)
+      }
+    },
+    [messages, sending],
   )
 
   const clear = useCallback(() => {
@@ -93,6 +131,8 @@ export function useChat() {
     selected,
     setSelectedId,
     send,
+    decide,
+    pendingApproval: selected?.pendingApproval ?? null,
     clear,
   }
 }

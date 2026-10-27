@@ -17,7 +17,8 @@ export default function App() {
   const [activeLabel, setActiveLabel] = useState<number | null>(null)
 
   const sources = chat.selected?.sources ?? []
-  const events = chat.sending ? pendingWorkflow() : (chat.selected?.workflow ?? [])
+  const events =
+    chat.sending && !chat.pendingApproval ? pendingWorkflow() : (chat.selected?.workflow ?? [])
 
   return (
     <div className="shell">
@@ -44,6 +45,7 @@ export default function App() {
         }}
         selectedId={chat.selected?.id ?? null}
         onCite={setActiveLabel}
+        pending={Boolean(chat.pendingApproval)}
       />
       <aside className="right">
         <SourcePanel
@@ -52,7 +54,14 @@ export default function App() {
           onSelect={setActiveLabel}
         />
         <AgentActivity events={events} />
-        <ApprovalCard description={null} onApprove={() => undefined} onReject={() => undefined} />
+        <ApprovalCard
+          tool={chat.pendingApproval?.tool ?? null}
+          description={chat.pendingApproval?.description ?? null}
+          preview={chat.pendingApproval?.preview ?? null}
+          busy={chat.sending}
+          onApprove={() => void chat.decide(true)}
+          onReject={() => void chat.decide(false)}
+        />
       </aside>
     </div>
   )

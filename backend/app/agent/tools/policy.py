@@ -1,12 +1,14 @@
 """Allowlisted tools.
 
 The planner can only name tools that appear here. Execution is delegated to the MCP
-client; unknown names never reach the server. Phase 6 will set ``requires_approval``
-on anything that changes state.
+client; unknown names never reach the server. Anything with ``requires_approval`` is
+interrupted by LangGraph before ``tools/call``.
 """
 
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
+
+MAX_PREVIEW_CHARS = 400
 
 
 class ToolRunner(Protocol):
@@ -35,11 +37,34 @@ TOOLS: dict[str, ToolSpec] = {
         read_only=True,
         requires_approval=False,
     ),
+    "save_note": ToolSpec(
+        name="save_note",
+        description="Save a short note to the local notebook. Requires human approval.",
+        read_only=False,
+        requires_approval=True,
+    ),
 }
 
 
 def list_tools() -> list[ToolSpec]:
     return sorted(TOOLS.values(), key=lambda spec: spec.name)
+
+
+def describe_approval(name: str, arguments: dict[str, Any] | None) -> dict[str, str]:
+    """Human-facing payload for a LangGraph interrupt. Not stored in traces."""
+    args = arguments or {}
+    if name == "save_note":
+        text = str(args.get("text") or "")
+        title = str(args.get("title") or "").strip()
+        description = "Save a note to the local notebook."
+        if title:
+            description = f'Save a note titled "{title[:80]}" to the local notebook.'
+        return {
+            "tool": name,
+            "description": description,
+            "preview": text[:MAX_PREVIEW_CHARS],
+        }
+    return {"tool": name, "description": f"Run the {name} tool.", "preview": ""}
 
 
 async def execute_tool(

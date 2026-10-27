@@ -79,16 +79,20 @@ errors with logs.
 
 Deleting a document removes it from all three.
 
-## Agent tools and traces (Phases 4-5)
+## Agent tools and traces (Phases 4-6)
 
 - The planner can only name tools in `app/agent/tools/policy.py`. Unknown names are clamped
   to `answer` before anything runs, and `execute_tool` refuses them before an MCP
   `tools/call`. The calculator evaluates an AST of `+ - * / // % **` and numeric constants;
   it cannot call names, attributes or Python builtins. The clock is read-only. There is no
-  shell. Write tools are reserved for Phase 6 (`requires_approval`).
+  shell.
+- `save_note` is the only write tool. It is `requires_approval=True`. LangGraph
+  `interrupt()` runs *before* MCP, so a rejected or never-confirmed proposal never
+  reaches `notes.jsonl`. The UI shows a preview; traces and logs do not store the note
+  body (only tool name, approved true/false, and character counts).
 - `GET /agent/trace/{id}` and `ChatResponse.workflow` expose high-level labels
-  (`Analysed request`, `Used calculator tool`). They do not store the question, the answer,
-  chunk text, tool arguments or the planner's raw JSON.
+  (`Analysed request`, `Waiting for approval`, `Used calculator tool`). They do not store
+  the question, the answer, chunk text, tool arguments or the planner's raw JSON.
 - Logs add node names, tool names and chunk counts; still no message bodies.
 
 ## Known gaps (to be addressed or documented in later phases)

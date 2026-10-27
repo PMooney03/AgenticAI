@@ -111,6 +111,35 @@ describe('createClient', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('http://api.test/agent/tools')
   })
 
+  it('posts an approval decision', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      expect(String(input)).toBe('http://api.test/agent/runs/abc/decision')
+      expect(init?.method).toBe('POST')
+      expect(JSON.parse(String(init?.body))).toEqual({ approved: true })
+      return new Response(
+        JSON.stringify({
+          answer: 'Saved.',
+          mode: 'chat',
+          model: 'm',
+          prompt_version: 'agent-answer-v1',
+          request_id: 'abc',
+          latency_ms: 1,
+          sources: [],
+          retrieval: null,
+          prompt_tokens: 1,
+          completion_tokens: 1,
+          workflow: [],
+          pending_approval: null,
+        }),
+        { status: 200 },
+      )
+    })
+    const client = createClient({ baseUrl: 'http://api.test', fetch: fetchMock })
+    const result = await client.decideRun('abc', true)
+    expect(result.answer).toBe('Saved.')
+    expect(result.pending_approval).toBeNull()
+  })
+
   it('uploads with multipart and no forced JSON content-type', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
       const headers = new Headers(init?.headers)

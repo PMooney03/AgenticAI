@@ -1,11 +1,24 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app.agent.tools.policy import list_tools
 from app.agent.trace import TraceStore
-from app.schemas.agent import AgentTraceResponse, ToolInfo, ToolListResponse
-from app.schemas.chat import ErrorResponse, WorkflowEvent
+from app.api.chat import (
+    _LLM_DOWN,
+    _RETRIEVAL_DOWN,
+    _store_trace,
+    chat_response_from_result,
+)
+from app.dependencies import AgentDep
+from app.embeddings import EmbeddingUnavailableError
+from app.llm import LLMUnavailableError
+from app.retrieval import VectorStoreUnavailableError
+from app.schemas.agent import AgentTraceResponse, ApprovalDecision, ToolInfo, ToolListResponse
+from app.schemas.chat import ChatResponse, ErrorResponse, WorkflowEvent
 
 router = APIRouter(tags=["agent"])
+logger = logging.getLogger(__name__)
 
 
 def _trace_store(request: Request) -> TraceStore:
@@ -47,3 +60,42 @@ async def agent_trace(request_id: str, request: Request) -> AgentTraceResponse:
         prompt_version=record.prompt_version,
         model=record.model,
     )
+
+
+@router.post(
+    "/agent/runs/{request_id}/decision",
+    response_model=ChatResponse,
+    summary="Approve or reject a pending write tool",
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
+    },
+)
+async def agent_decision(
+    request_id: str,
+    payload: ApprovalDecision,
+    request: Request,
+    agent: AgentDep,
+) -> ChatResponse:
+    try:
+        result = await agent.resume(request_id, approved=payload.approved)
+    except LookupError as exc:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, detail="No pending approval for that request."
+        ) from exc
+    except LLMUnavailableError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=_LLM_DOWN) from exc
+    except (EmbeddingUnavailableError, VectorStoreUnavailableError) as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=_RETRIEVAL_DOWN) from exc
+
+    response = chat_response_from_result(result, request_id)
+    _store_trace(request, result, request_id)
+    logger.info(
+        "approval_resolved",
+        extra={
+            "approved": payload.approved,
+            "tool": (result.tool_names or [None])[0],
+            "pending": result.pending_approval is not None,
+        },
+    )
+    return response

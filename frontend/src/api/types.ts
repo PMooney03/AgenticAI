@@ -43,6 +43,12 @@ export interface WorkflowEvent {
   done: boolean
 }
 
+export interface PendingApproval {
+  tool: string
+  description: string
+  preview: string
+}
+
 export interface ChatResponse {
   answer: string
   mode: ChatMode
@@ -55,6 +61,7 @@ export interface ChatResponse {
   prompt_tokens: number | null
   completion_tokens: number | null
   workflow: WorkflowEvent[]
+  pending_approval: PendingApproval | null
 }
 
 export interface ToolInfo {

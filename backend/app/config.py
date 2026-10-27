@@ -86,6 +86,10 @@ class Settings(BaseSettings):
         return self.data_dir / "registry.db"
 
     @property
+    def notes_path(self) -> Path:
+        return self.data_dir / "notes.jsonl"
+
+    @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
 

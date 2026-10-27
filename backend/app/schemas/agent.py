@@ -3,6 +3,10 @@ from pydantic import BaseModel, Field
 from app.schemas.chat import WorkflowEvent
 
 
+class ApprovalDecision(BaseModel):
+    approved: bool
+
+
 class ToolInfo(BaseModel):
     name: str
     description: str

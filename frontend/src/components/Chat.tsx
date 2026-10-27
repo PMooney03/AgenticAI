@@ -13,6 +13,7 @@ interface ChatProps {
   onSelect: (id: string) => void
   selectedId: string | null
   onCite: (label: number) => void
+  pending?: boolean
 }
 
 export function Chat({
@@ -25,6 +26,7 @@ export function Chat({
   onSelect,
   selectedId,
   onCite,
+  pending = false,
 }: ChatProps) {
   const [draft, setDraft] = useState('')
   const scroller = useRef<HTMLDivElement>(null)
@@ -125,7 +127,11 @@ export function Chat({
                 <i />
                 <i />
               </span>
-              {useDocuments ? 'Planning, searching, and composing an answer…' : 'Planning and answering…'}
+              {pending
+                ? 'Resuming after your decision…'
+                : useDocuments
+                  ? 'Planning, searching, and composing an answer…'
+                  : 'Planning and answering…'}
             </p>
           </article>
         ) : null}
@@ -144,7 +150,7 @@ export function Chat({
           value={draft}
           rows={2}
           placeholder="Ask a question about your documents…"
-          disabled={sending}
+          disabled={sending || pending}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -153,7 +159,7 @@ export function Chat({
             }
           }}
         />
-        <button type="submit" disabled={sending || !draft.trim()}>
+        <button type="submit" disabled={sending || pending || !draft.trim()}>
           Send
         </button>
       </form>

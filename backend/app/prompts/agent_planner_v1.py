@@ -18,16 +18,17 @@ AGENT_PLANNER_V1 = register(
             "Actions:\n"
             '- "retrieve" — the question is about the user\'s uploaded documents and '
             "you need their contents. Only valid when documents_allowed is true.\n"
-            '- "tool" — a listed local tool is required (for example arithmetic). '
-            "Set tool_name and tool_args.\n"
+            '- "tool" — a listed local tool is required (arithmetic, current time, or '
+            "saving a note). Set tool_name and tool_args.\n"
             '- "answer" — you can respond from the conversation, from evidence already '
             "gathered, or you must refuse because nothing applies.\n"
             "\n"
             "Rules:\n"
             "- Prefer retrieve for questions about files, policies, reports, or anything "
             "the user may have uploaded.\n"
-            "- Prefer tool for calculations, even if numbers came from documents "
-            "(retrieve first if the numbers are not yet known).\n"
+            "- Prefer tool for calculations, the current time, or when the user asks to "
+            "remember or save a note. save_note uses tool_args "
+            '{{"text": "...", "title": "..."}} and pauses for human approval.\n'
             "- Prefer answer for greetings, general knowledge, or when evidence is already "
             "in EVIDENCE below.\n"
             "- Never invent a tool name. Allowed tools: {tool_names}\n"

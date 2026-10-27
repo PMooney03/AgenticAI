@@ -77,7 +77,9 @@ def initial_state(
     )
 
 
-def append_step(state: AgentState, *, node: str, label: str, step_id: str) -> list[WorkflowStep]:
+def append_step(
+    state: AgentState, *, node: str, label: str, step_id: str, done: bool = True
+) -> list[WorkflowStep]:
     steps = list(state.get("steps") or [])
-    steps.append(WorkflowStep(id=step_id, node=node, label=label, done=True))
+    steps.append(WorkflowStep(id=step_id, node=node, label=label, done=done))
     return steps
