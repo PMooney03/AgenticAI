@@ -104,11 +104,18 @@ Deleting a document removes it from all three.
 - Lexical groundedness is computed at request time from evidence already in graph state,
   then discarded. Only the float is retained.
 
-## Known gaps (to be addressed or documented in later phases)
+## Docker bind address (Phase 8)
 
-- No authentication: the API is intended for a single local user. Phase 8 documents how to
-  bind to localhost only in Docker.
+Published Compose ports are `127.0.0.1:8000`, `127.0.0.1:8080` and `127.0.0.1:6333`.
+Uvicorn still listens on `0.0.0.0` *inside* the container so the Docker network can
+reach it; the restriction is on the host publish. There is still no authentication:
+localhost-only is the control that matches a single-user app.
+
+## Known gaps
+
+- No authentication: the API is intended for a single local user.
 - No rate limiting.
 - No antivirus scanning of uploads.
 - PDF parsing uses `pypdf`; a malicious PDF could still exercise parser bugs. Parsing runs
   in-process today; sandboxing it is listed as a future improvement.
+- In-memory checkpointer, traces and metrics reset when the backend container restarts.

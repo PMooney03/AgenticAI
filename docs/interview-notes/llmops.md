@@ -18,7 +18,7 @@ In this project that means three layers:
   number for generation, because they fail independently.
 - Paid tracing (LangSmith, etc.) is out of scope. The same signals fit in-process here
   and map onto Prometheus later.
-- The golden set is what CI will run in Phase 8: deterministic, fast, no GPU.
+- The golden set is what CI runs: deterministic, fast, no GPU.
 
 ## What problem it solves
 

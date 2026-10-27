@@ -5,10 +5,9 @@ traditional RAG "second brain" into a LangGraph-driven agent that decides when t
 documents, when to call tools (via MCP), and when to keep reasoning through a multi-step
 workflow, with human approval for anything that changes state.
 
-> Status: **Phase 7 complete** - LLMOps is live. Chat records latency, tokens, citation
-> rate and groundedness; `GET /metrics` and a golden-set eval (`POST /eval/run` or
-> `python -m app.eval`) score retrieval and generation separately. See [Build phases](#build-phases)
-> for Docker/CI next.
+> Status: **Phase 8 complete** - the local stack is packaged. `docker compose --profile app`
+> runs nginx, FastAPI and Qdrant on localhost; GitHub Actions lints, tests, evals and
+> builds the images.
 
 ## Table of contents
 
@@ -26,7 +25,11 @@ workflow, with human approval for anything that changes state.
 - [Project structure](#project-structure)
 - [Design decisions](#design-decisions)
 - [Interview notes](#interview-notes)
-- [Roadmap sections](#roadmap-sections)
+- [Docker](#docker)
+- [CI/CD](#cicd)
+- [Limitations](#limitations)
+- [Future improvements](#future-improvements)
+- [Azure mapping](#azure-mapping)
 
 ## Overview
 
@@ -99,7 +102,7 @@ data flow.
 | Agent | LangGraph | Stateful, inspectable workflow with conditional routing |
 | Tools | MCP (`mcp` 2.x) | Allowlisted local tools over the Model Context Protocol |
 | Frontend | React, TypeScript, Vite | Sidebar, chat, source citations, LangGraph activity panel |
-| Infra | Docker Compose, GitHub Actions (Phase 8) | Local orchestration and CI |
+| Infra | Docker Compose, GitHub Actions | Local orchestration and CI |
 
 ## Build phases
 
@@ -113,12 +116,14 @@ data flow.
 | 5 | MCP tools | Done |
 | 6 | Human-in-the-loop approval | Done |
 | 7 | Logging, metrics, evaluation (LLMOps) | Done |
-| 8 | Docker Compose + CI/CD hardening | Planned |
+| 8 | Docker Compose + CI/CD hardening | Done |
 
 ## Local setup
 
 Prerequisites: [Ollama](https://ollama.com) running on the host, Docker Desktop,
 [uv](https://docs.astral.sh/uv/).
+
+### Inner loop (host API + Vite, Qdrant in Docker)
 
 ```powershell
 # Pull models (once)
@@ -146,7 +151,17 @@ npm run dev
 Open http://localhost:5173 for the UI, http://localhost:8000/docs for OpenAPI, and
 http://localhost:6333/dashboard for Qdrant. If port 8000 is already in use, start the
 backend with `--port 8010` and set `VITE_API_BASE_URL=http://localhost:8010` in
-`frontend/.env`. The backend allowlists `http://localhost:5173` via `CORS_ORIGINS`.
+`frontend/.env`. The backend allowlists Vite and the Compose UI via `CORS_ORIGINS`.
+
+### Packaged stack
+
+```powershell
+docker compose --profile app up -d --build
+```
+
+Then http://localhost:8080 (UI), http://localhost:8000/docs (API), Qdrant as above.
+Ollama still runs on the host; the backend container calls
+`http://host.docker.internal:11434`. Published ports bind to `127.0.0.1`.
 
 ## API
 
@@ -278,8 +293,8 @@ npm run build
 
 Backend coverage: config, prompt registry, upload validation, loaders, chunking, registry,
 Qdrant, retriever, RAG pipeline, LangGraph routing/tools/graph/interrupts, MCP, notes,
-quality scores, metrics store, golden-set eval, CORS, every API endpoint, mocked
-Ollama/embeddings.
+quality scores, metrics store, golden-set eval, Compose localhost binds, CORS, every API
+endpoint, mocked Ollama/embeddings.
 
 Frontend coverage: API client (request IDs, multipart upload, error parsing, tools,
 approval decisions, metrics/eval), citation splitting, source panel, agent-activity,
@@ -288,8 +303,10 @@ ApprovalCard, MetricsPanel.
 ## Project structure
 
 ```
-docker-compose.yml       Qdrant (backend + frontend services arrive in Phase 8)
+docker-compose.yml       Qdrant; profile `app` adds backend + frontend (localhost bind)
+.github/workflows/ci.yml Lint, pytest, golden eval, Vitest, image build
 backend/
+  Dockerfile             Python 3.12 + uv, non-root, uvicorn :8000
   app/
     main.py              FastAPI app factory, middleware, exception handlers, routers
     config.py            Settings from environment (pydantic-settings)
@@ -310,6 +327,8 @@ backend/
     eval/                quality scores + golden-set runner (`python -m app.eval`)
   tests/
 frontend/
+  Dockerfile             Node build → nginx, empty VITE_API_BASE_URL (same-origin)
+  nginx.conf             SPA + reverse proxy to backend:8000
   src/
     api/                 typed client + ApiError
     components/          Sidebar, Chat, SourcePanel, AgentActivity, ApprovalCard, MetricsPanel
@@ -356,6 +375,9 @@ data/                    (gitignored) uploads/, qdrant/, registry.db
   and the golden set. Retrieval hit and generation (citations + lexical overlap) are
   separate checks. Metrics store numbers, never content. Eval uses fakes so CI does not
   need Ollama.
+- **Localhost-bound Compose.** The container process listens on `0.0.0.0`; the *published*
+  port is `127.0.0.1`. Ollama stays on the host via `host.docker.internal`. The nginx
+  frontend reverse-proxies the API so the packaged UI is same-origin.
 
 Security and privacy decisions are documented in [docs/security.md](docs/security.md).
 
@@ -374,12 +396,60 @@ Short explainers for each technology, written as it enters the project:
 - [MCP](docs/interview-notes/mcp.md)
 - [Human-in-the-loop](docs/interview-notes/hitl.md)
 - [LLMOps](docs/interview-notes/llmops.md)
+- [Docker Compose](docs/interview-notes/docker.md)
+- [CI/CD](docs/interview-notes/ci.md)
 
-## Roadmap sections
+## Docker
 
-The following README sections will be filled in by later phases: LangChain role in depth,
-Docker setup for all services, screenshots, CI/CD, limitations, future improvements, and
-an Azure mapping of each local component.
+Qdrant always runs as a Compose service. Backend and frontend images sit on profile
+`app` so the inner loop (`docker compose up -d qdrant` plus host `uv`/`npm`) does not
+change. `uv sync --frozen` and `npm ci` make the images match the lockfiles. nginx
+serves the SPA and proxies `/chat`, `/documents`, `/agent`, `/metrics` and `/eval` to
+FastAPI.
+
+Full write-up: [docs/interview-notes/docker.md](docs/interview-notes/docker.md).
+
+## CI/CD
+
+GitHub Actions (`.github/workflows/ci.yml`) on push and pull request:
+
+1. Backend: Ruff, pytest, `python -m app.eval` (no Ollama).
+2. Frontend: oxlint, Vitest, production build.
+3. `docker compose --profile app build` after both pass. Images are not pushed.
+
+Full write-up: [docs/interview-notes/ci.md](docs/interview-notes/ci.md).
+
+## Limitations
+
+- Single local user; no login. Localhost-bound ports are the access control.
+- LangGraph checkpoints, traces and metrics are in-memory. A backend restart drops a
+  pending approval; Qdrant, SQLite and `notes.jsonl` persist.
+- Groundedness is lexical overlap, not an LLM-as-judge. Paraphrases can look ungrounded.
+- `qwen2.5:14b` is slow on CPU; first request after idle loads the model.
+- No rate limiting, no virus scan of uploads, PDF parsing is in-process.
+
+## Future improvements
+
+- Durable checkpointer (SQLite/Postgres saver) so HITL survives restarts.
+- Fake-provider compose profile for a full `up` smoke test in CI without Ollama.
+- Hybrid search (keyword + vectors) and a live-model nightly eval.
+- Sandbox PDF parsing; optional auth if the bind address ever leaves localhost.
+
+## Azure mapping
+
+Local pieces are seams, not Azure SDKs. A hosted port would swap the provider classes
+and the Compose services; routes, prompts, graph and eval stay.
+
+| Local | Azure analogue |
+| --- | --- |
+| Ollama `qwen2.5:14b` | Azure OpenAI / Azure AI Foundry chat deployment |
+| Ollama `nomic-embed-text` | Azure OpenAI embeddings |
+| Qdrant in Docker | Azure AI Search (vector + filter) |
+| FastAPI container | Azure Container Apps or App Service |
+| nginx frontend | Static Web Apps or the same Container App |
+| `data/` volume | Blob Storage (files) + Azure SQL/Cosmos (registry) |
+| GitHub Actions | GitHub Actions → ACR, or Azure DevOps |
+| `LLMProvider` / `EmbeddingProvider` | One new adapter class each; no route changes |
 
 ## LLMOps
 

@@ -1,7 +1,6 @@
 # Architecture
 
-This document captures the target design and is updated as phases land. Sections marked
-*(planned)* describe components not yet implemented (Phase 8: Docker Compose + CI).
+This document captures the target design and is updated as phases land.
 
 ## Component map
 
@@ -41,7 +40,7 @@ flowchart TD
 | MCP server + client | Allowlisted calculator + clock over official `mcp` SDK | Phase 5 |
 | Human-in-the-loop | `interrupt()` on `save_note`; `POST /agent/runs/{id}/decision` | Phase 6 |
 | Evaluation | Golden set, citation rate, lexical groundedness, HITL checks | Phase 7 |
-| Docker Compose + CI | `frontend`, `backend`, `qdrant`; GitHub Actions lint/test/build | Phase 8 *(planned)* |
+| Docker Compose + CI | `frontend`, `backend`, `qdrant`; GitHub Actions lint/test/eval/build | Phase 8 |
 
 ## Ingestion flow (Phase 2)
 
@@ -218,4 +217,18 @@ Online: every finished (or paused) agent run records latency, tokens, tools, cit
 rate and groundedness — never the answer text. Offline: the same graph runs against
 fakes on a pinned dataset (`python -m app.eval`). Retrieval hit and generation quality
 are separate checks.
+
+## Packaging (Phase 8)
+
+```mermaid
+flowchart LR
+    Browser[Browser :8080] --> Nginx[nginx SPA + proxy]
+    Nginx --> API[FastAPI :8000]
+    API --> Q[(Qdrant)]
+    API --> Host[Ollama on host :11434]
+```
+
+`docker compose up -d qdrant` is still the inner-loop command. `--profile app` adds the
+backend and frontend images. Published ports bind to `127.0.0.1`. GitHub Actions runs
+ruff, pytest, the golden eval, Vitest, `npm run build`, and `docker compose build`.
 

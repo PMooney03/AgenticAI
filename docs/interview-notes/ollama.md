@@ -36,7 +36,7 @@ letting you choose the model per request.
 - `app/llm/ollama.py` implements it with LangChain's `ChatOllama` as the HTTP client, and
   checks `GET /api/tags` to confirm the configured model is pulled.
 - `OLLAMA_BASE_URL` and `OLLAMA_MODEL` come from the environment (`app/config.py`).
-- When the backend runs in Docker (Phase 8) the URL becomes
+- When the backend runs in Docker the URL becomes
   `http://host.docker.internal:11434` so the container can reach Ollama on the host.
 
 ## How I would explain it in an interview

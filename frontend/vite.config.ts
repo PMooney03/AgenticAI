@@ -12,6 +12,8 @@ export default defineConfig({
       '/chat': backend,
       '/documents': backend,
       '/agent': backend,
+      '/metrics': backend,
+      '/eval': backend,
     },
   },
   test: {

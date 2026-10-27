@@ -80,8 +80,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "Local, agentic second brain. Phase 7: LangGraph retrieves, calls allowlisted "
-            "MCP tools, pauses writes for approval, and exposes metrics plus a golden-set eval."
+            "Local, agentic second brain. Phase 8: LangGraph retrieves, calls allowlisted "
+            "MCP tools, pauses writes for approval, exposes metrics plus a golden-set eval, "
+            "and ships with Docker Compose and CI."
         ),
         lifespan=_lifespan,
     )
