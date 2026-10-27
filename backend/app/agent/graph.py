@@ -19,6 +19,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
@@ -32,7 +33,7 @@ from app.llm.base import LLMProvider
 from app.retrieval.retriever import Retriever
 
 
-def build_graph(nodes: NodeFns, checkpointer: InMemorySaver):
+def build_graph(nodes: NodeFns, checkpointer: BaseCheckpointSaver):
     graph = StateGraph(AgentState)
     graph.add_node("plan", nodes.plan)
     graph.add_node("retrieve", nodes.retrieve)
@@ -94,7 +95,7 @@ class Agent:
         llm: LLMProvider,
         retriever: Retriever,
         tools: ToolRunner | None = None,
-        checkpointer: InMemorySaver | None = None,
+        checkpointer: BaseCheckpointSaver | None = None,
         max_steps: int = 3,
     ) -> None:
         self._llm = llm

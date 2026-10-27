@@ -87,3 +87,6 @@ with a hard step budget."
   keeps latency and traces predictable.
 - Do not put hidden chain-of-thought or full chunks in the activity panel or the trace
   store. Labels only.
+- A checkpointer is required for `interrupt()`. We persist to SQLite so a pending write
+  still exists after the API process restarts; tests that do not care about durability
+  keep `InMemorySaver`.

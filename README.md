@@ -5,9 +5,9 @@ traditional RAG "second brain" into a LangGraph-driven agent that decides when t
 documents, when to call tools (via MCP), and when to keep reasoning through a multi-step
 workflow, with human approval for anything that changes state.
 
-> Status: **Phase 8 complete** - the local stack is packaged. `docker compose --profile app`
+> Status: **Phase 8 complete**, plus durable HITL checkpoints. `docker compose --profile app`
 > runs nginx, FastAPI and Qdrant on localhost; GitHub Actions lints, tests, evals and
-> builds the images.
+> builds the images. Pending `save_note` approvals persist in `data/checkpoints.sqlite`.
 
 ## Table of contents
 
@@ -117,6 +117,7 @@ data flow.
 | 6 | Human-in-the-loop approval | Done |
 | 7 | Logging, metrics, evaluation (LLMOps) | Done |
 | 8 | Docker Compose + CI/CD hardening | Done |
+| Follow-up | Durable SQLite LangGraph checkpoints so HITL survives restart | Done |
 
 ## Local setup
 
@@ -338,7 +339,7 @@ frontend/
 docs/
   architecture.md  security.md
   interview-notes/       One page per technology, written as it is introduced
-data/                    (gitignored) uploads/, qdrant/, registry.db
+data/                    (gitignored) uploads/, qdrant/, registry.db, notes.jsonl, checkpoints.sqlite
 ```
 
 ## Design decisions
@@ -369,8 +370,9 @@ data/                    (gitignored) uploads/, qdrant/, registry.db
 - **MCP for tools.** The graph names an allowlisted tool; an MCP client calls the local
   server. FastAPI uses the SDK in-memory transport; `python -m app.mcp` is stdio.
 - **Human approval for writes.** `save_note` is `requires_approval`. LangGraph
-  `interrupt()` checkpoints the run; the UI shows the proposed note; only `approved: true`
-  resumes into MCP. Reject never touches `data/notes.jsonl`.
+  `interrupt()` checkpoints the run to `data/checkpoints.sqlite`; the UI shows the
+  proposed note; only `approved: true` resumes into MCP. Reject never touches
+  `data/notes.jsonl`. A backend restart does not drop a pending approval.
 - **Online metrics, offline eval.** The same `score_quality` function scores live chats
   and the golden set. Retrieval hit and generation (citations + lexical overlap) are
   separate checks. Metrics store numbers, never content. Eval uses fakes so CI does not
@@ -422,15 +424,14 @@ Full write-up: [docs/interview-notes/ci.md](docs/interview-notes/ci.md).
 ## Limitations
 
 - Single local user; no login. Localhost-bound ports are the access control.
-- LangGraph checkpoints, traces and metrics are in-memory. A backend restart drops a
-  pending approval; Qdrant, SQLite and `notes.jsonl` persist.
+- Traces and live metrics are in-memory. HITL checkpoints persist in
+  `data/checkpoints.sqlite`; Qdrant, the document registry and `notes.jsonl` persist too.
 - Groundedness is lexical overlap, not an LLM-as-judge. Paraphrases can look ungrounded.
 - `qwen2.5:14b` is slow on CPU; first request after idle loads the model.
 - No rate limiting, no virus scan of uploads, PDF parsing is in-process.
 
 ## Future improvements
 
-- Durable checkpointer (SQLite/Postgres saver) so HITL survives restarts.
 - Fake-provider compose profile for a full `up` smoke test in CI without Ollama.
 - Hybrid search (keyword + vectors) and a live-model nightly eval.
 - Sandbox PDF parsing; optional auth if the bind address ever leaves localhost.
@@ -468,8 +469,8 @@ Read-only tools (calculator, clock) run in the `call_tool` node immediately. `sa
 writes a JSON line to `data/notes.jsonl`, so the node calls LangGraph `interrupt()` first.
 `POST /chat` then returns `pending_approval` (tool name, description, preview) instead of a
 finished answer. Approve or reject with `POST /agent/runs/{request_id}/decision`. The
-graph resumes on the same thread id; MCP runs only after approve. Traces keep labels, not
-the note text.
+graph resumes on the same thread id (SQLite-backed, so a restart does not drop it); MCP
+runs only after approve. Traces keep labels, not the note text.
 
 Full write-up: [docs/interview-notes/hitl.md](docs/interview-notes/hitl.md).
 

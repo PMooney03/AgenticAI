@@ -76,6 +76,8 @@ errors with logs.
 - Uploaded files: `data/uploads/<document_id>/<safe_name>` (gitignored).
 - Vectors and chunk text: Qdrant volume at `data/qdrant/` (gitignored).
 - Document registry: `data/registry.db` (gitignored).
+- LangGraph HITL checkpoints: `data/checkpoints.sqlite` (gitignored). Contains paused
+  thread state (question, pending preview, retrieved chunks).
 
 Deleting a document removes it from all three.
 
@@ -118,4 +120,6 @@ localhost-only is the control that matches a single-user app.
 - No antivirus scanning of uploads.
 - PDF parsing uses `pypdf`; a malicious PDF could still exercise parser bugs. Parsing runs
   in-process today; sandboxing it is listed as a future improvement.
-- In-memory checkpointer, traces and metrics reset when the backend container restarts.
+- Traces and metrics are still in-memory and reset on restart. HITL checkpoints persist
+  in `data/checkpoints.sqlite` (gitignored). That file contains graph state for paused
+  threads, including the question and the pending note preview — treat it like notes.

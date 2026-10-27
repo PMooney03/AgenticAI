@@ -1,6 +1,9 @@
 from pathlib import Path
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
+
 from app.agent import Agent
+from app.agent.checkpoint import sqlite_checkpointer
 from app.embeddings import FakeEmbeddingProvider
 from app.ingestion.chunking import Chunk
 from app.llm import FakeLLMProvider
@@ -26,6 +29,7 @@ async def _agent(
     *,
     chunks: list[Chunk] | None = None,
     notes_path: Path | None = None,
+    checkpointer: BaseCheckpointSaver | None = None,
 ) -> Agent:
     store = QdrantVectorStore(location=":memory:", collection="agent")
     if chunks:
@@ -35,7 +39,7 @@ async def _agent(
     tools = None
     if notes_path is not None:
         tools = InProcessMCPClient(build_mcp_server(notes_path=notes_path))
-    return Agent(llm=llm, retriever=retriever, tools=tools, max_steps=3)
+    return Agent(llm=llm, retriever=retriever, tools=tools, checkpointer=checkpointer, max_steps=3)
 
 
 def _chunk() -> Chunk:
@@ -159,6 +163,32 @@ async def test_graph_save_note_reject_skips_write(
     assert done.tool_calls[0]["ok"] == "false"
     assert "rejected" in done.tool_calls[0]["output"].lower()
     assert not notes.exists()
+
+
+async def test_interrupt_survives_new_agent_on_sqlite(
+    fake_embeddings: FakeEmbeddingProvider, tmp_path: Path
+) -> None:
+    notes = tmp_path / "notes.jsonl"
+    db = tmp_path / "checkpoints.sqlite"
+    llm = FakeLLMProvider(replies=[PLAN_NOTE, "Saved after restart."])
+
+    async with sqlite_checkpointer(db) as saver:
+        agent = await _agent(llm, fake_embeddings, notes_path=notes, checkpointer=saver)
+        paused = await agent.run(
+            question="remember to buy milk",
+            history=[],
+            use_documents=False,
+            thread_id="durable",
+        )
+        assert paused.pending_approval is not None
+        assert not notes.exists()
+
+    async with sqlite_checkpointer(db) as saver:
+        agent = await _agent(llm, fake_embeddings, notes_path=notes, checkpointer=saver)
+        done = await agent.resume("durable", approved=True)
+        assert done.pending_approval is None
+        assert "Buy milk" in notes.read_text(encoding="utf-8")
+        assert done.tool_names == ["save_note"]
 
 
 async def test_graph_garbled_plan_retrieves_when_documents_on(

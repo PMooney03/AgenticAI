@@ -38,7 +38,7 @@ flowchart TD
 | LangGraph | Stateful plan / retrieve / tool / evaluate loop with conditional routing | Phase 4 |
 | Trace store | In-memory high-level steps keyed by request ID (no content) | Phase 4 |
 | MCP server + client | Allowlisted calculator + clock over official `mcp` SDK | Phase 5 |
-| Human-in-the-loop | `interrupt()` on `save_note`; `POST /agent/runs/{id}/decision` | Phase 6 |
+| Human-in-the-loop | `interrupt()` on `save_note`; SQLite checkpointer; `POST /agent/runs/{id}/decision` | Phase 6 |
 | Evaluation | Golden set, citation rate, lexical groundedness, HITL checks | Phase 7 |
 | Docker Compose + CI | `frontend`, `backend`, `qdrant`; GitHub Actions lint/test/eval/build | Phase 8 |
 
@@ -146,6 +146,7 @@ flowchart TD
 State carried through the graph: `question`, `history`, `steps[]` (high-level trace shown
 to the user), `chunks[]`, `tool_results[]`, `step_count`, `answer`, `sources`.
 `save_note` calls `interrupt()`; `ChatResponse.pending_approval` carries the proposal.
+Checkpoints are SQLite (`data/checkpoints.sqlite`) so a pending approval survives restart.
 
 ## Tool calls (Phase 5)
 

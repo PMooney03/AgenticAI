@@ -12,7 +12,7 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, Request
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from app.config import Settings, get_settings
 from app.embeddings import EmbeddingProvider, LocalEmbeddingProvider
@@ -112,11 +112,11 @@ def get_rag_pipeline(retriever: RetrieverDep, llm: LLMProviderDep) -> RAGPipelin
 RAGPipelineDep = Annotated[RAGPipeline, Depends(get_rag_pipeline)]
 
 
-def get_checkpointer(request: Request) -> InMemorySaver:
+def get_checkpointer(request: Request) -> BaseCheckpointSaver:
     return request.app.state.checkpointer
 
 
-CheckpointerDep = Annotated[InMemorySaver, Depends(get_checkpointer)]
+CheckpointerDep = Annotated[BaseCheckpointSaver, Depends(get_checkpointer)]
 
 
 async def get_agent(

@@ -17,6 +17,7 @@ def test_defaults_point_at_local_ollama(monkeypatch: pytest.MonkeyPatch) -> None
     assert s.log_level == "INFO"
     assert s.cors_origin_list == ["http://localhost:5173", "http://127.0.0.1:5173"]
     assert s.agent_max_steps == 3
+    assert s.checkpoint_path.name == "checkpoints.sqlite"
 
 
 def test_cors_origins_are_split_and_trimmed() -> None:

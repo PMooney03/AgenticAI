@@ -1,6 +1,14 @@
 from fastapi.testclient import TestClient
 
+from app.dependencies import (
+    get_document_registry,
+    get_embedding_provider,
+    get_llm_provider,
+    get_settings,
+    get_vector_store,
+)
 from app.llm import FakeLLMProvider
+from app.main import create_app
 
 PLAN_TOOL = (
     '{"action": "tool", "tool_name": "calculator", "tool_args": {"expression": "12 * (3 + 4)"}}'
@@ -109,3 +117,37 @@ def test_chat_save_note_reject_does_not_write(
 def test_decision_404_without_pending(client: TestClient) -> None:
     response = client.post("/agent/runs/does-not-exist/decision", json={"approved": True})
     assert response.status_code == 404
+
+
+def test_approval_survives_app_restart(
+    settings,
+    fake_llm: FakeLLMProvider,
+    fake_embeddings,
+    vector_store,
+    registry,
+) -> None:
+    fake_llm.replies = [PLAN_NOTE, "Saved after restart."]
+
+    def _app():
+        application = create_app(settings)
+        application.dependency_overrides[get_settings] = lambda: settings
+        application.dependency_overrides[get_llm_provider] = lambda: fake_llm
+        application.dependency_overrides[get_embedding_provider] = lambda: fake_embeddings
+        application.dependency_overrides[get_vector_store] = lambda: vector_store
+        application.dependency_overrides[get_document_registry] = lambda: registry
+        return application
+
+    with TestClient(_app()) as first:
+        paused = first.post(
+            "/chat", json={"message": "remember to buy milk", "use_documents": False}
+        )
+        assert paused.status_code == 200, paused.text
+        request_id = paused.json()["request_id"]
+        assert paused.json()["pending_approval"]["tool"] == "save_note"
+        assert not settings.notes_path.exists()
+
+    with TestClient(_app()) as second:
+        done = second.post(f"/agent/runs/{request_id}/decision", json={"approved": True})
+        assert done.status_code == 200, done.text
+        assert done.json()["pending_approval"] is None
+        assert "Buy milk" in settings.notes_path.read_text(encoding="utf-8")

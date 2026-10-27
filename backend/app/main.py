@@ -9,8 +9,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from langgraph.checkpoint.memory import InMemorySaver
 
+from app.agent.checkpoint import sqlite_checkpointer
 from app.agent.trace import TraceStore
 from app.api import agent, chat, documents, evaluation, health
 from app.api import metrics as metrics_api
@@ -29,18 +29,21 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     ensure_pywin32()
     get_mcp_server(str(settings.notes_path))
-    logger.info(
-        "app_started",
-        extra={
-            "model": settings.ollama_model,
-            "embedding_model": settings.embedding_model,
-            "ollama_base_url": settings.ollama_base_url_str,
-            "qdrant_url": settings.qdrant_url,
-            "log_level": settings.log_level,
-        },
-    )
-    yield
-    logger.info("app_stopped")
+    async with sqlite_checkpointer(settings.checkpoint_path) as saver:
+        app.state.checkpointer = saver
+        logger.info(
+            "app_started",
+            extra={
+                "model": settings.ollama_model,
+                "embedding_model": settings.embedding_model,
+                "ollama_base_url": settings.ollama_base_url_str,
+                "qdrant_url": settings.qdrant_url,
+                "log_level": settings.log_level,
+                "checkpointer": str(settings.checkpoint_path),
+            },
+        )
+        yield
+        logger.info("app_stopped")
 
 
 def _request_id(request: Request) -> str | None:
@@ -80,15 +83,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "Local, agentic second brain. Phase 8: LangGraph retrieves, calls allowlisted "
-            "MCP tools, pauses writes for approval, exposes metrics plus a golden-set eval, "
-            "and ships with Docker Compose and CI."
+            "Local, agentic second brain. LangGraph retrieves, calls allowlisted MCP tools, "
+            "pauses writes for approval (SQLite checkpoints survive restart), exposes "
+            "metrics plus a golden-set eval, and ships with Docker Compose and CI."
         ),
         lifespan=_lifespan,
     )
     app.state.settings = settings
     app.state.traces = TraceStore()
-    app.state.checkpointer = InMemorySaver()
+    app.state.checkpointer = None
     app.state.metrics = MetricsStore()
     app.state.last_eval = None
 

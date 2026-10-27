@@ -65,5 +65,6 @@ resolved today'."
   on the *published* port, not in uvicorn.
 - Bind-mount permissions vs a non-root USER differ on Linux and Docker Desktop. Named
   volumes are smoother in production.
-- Recreating the backend wipes in-memory checkpoints, traces and metrics (HITL mid-approve
-  does not survive). Durable state is Qdrant, SQLite and `notes.jsonl` only.
+- Recreating the backend wipes in-memory traces and metrics. HITL checkpoints live in
+  `data/checkpoints.sqlite` on the `./data` volume, so a pending approval survives a
+  bounce. Traces and live metrics still reset.

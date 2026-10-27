@@ -47,7 +47,9 @@ plan names save_note
   -> call_tool restarts; MCP save_note runs only on approve
 ```
 
-- Checkpointer: `InMemorySaver` on `app.state` (process-local; enough for a single user).
+- Checkpointer: `AsyncSqliteSaver` at `data/checkpoints.sqlite` (opened in FastAPI
+  lifespan). A pending interrupt survives a backend restart; resume still uses the
+  chat `request_id` as the thread id. Graph unit tests keep `InMemorySaver`.
 - Thread id is the chat `request_id`.
 - Traces store labels (`Waiting for approval`, `Used save_note tool`) — not the note text.
   The preview is only on `pending_approval` so the human can read it.
@@ -55,10 +57,11 @@ plan names save_note
 
 ## How I would explain it in an interview
 
-"Read-only tools run. Writes pause. LangGraph `interrupt()` checkpoints the graph; the
-API returns a pending approval instead of an answer; the UI shows the proposed note;
-approve resumes the same thread and only then does the MCP `save_note` handler append
-to `notes.jsonl`. Reject never touches disk. The planner cannot bypass that flag."
+"Read-only tools run. Writes pause. LangGraph `interrupt()` checkpoints the graph to
+SQLite; the API returns a pending approval instead of an answer; the UI shows the
+proposed note; approve resumes the same thread and only then does the MCP `save_note`
+handler append to `notes.jsonl`. Reject never touches disk. Restarting the API does not
+drop the pending write. The planner cannot bypass that flag."
 
 ## Gotchas worth mentioning
 
@@ -66,5 +69,8 @@ to `notes.jsonl`. Reject never touches disk. The planner cannot bypass that flag
   interrupt free of side effects.
 - A checkpointer is required. No saver, no pause.
 - Do not log the note body. Log tool name, approved true/false, and character counts.
-- In-memory checkpoints die with the process. That is acceptable locally; a durable
-  saver is a Phase 8 concern if the app must survive restarts mid-approval.
+- The SQLite file holds graph state for the paused thread (question, pending preview,
+  chunks). It lives under gitignored `data/`, same as notes and uploads. Postgres is
+  the production analogue; SQLite is the local one.
+- Close the saver on shutdown. An open `aiosqlite` connection will keep the process
+  from exiting (and on Windows will lock the file for the next process).
