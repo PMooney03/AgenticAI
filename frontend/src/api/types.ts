@@ -62,6 +62,7 @@ export interface ToolInfo {
   description: string
   read_only: boolean
   requires_approval: boolean
+  source: 'mcp'
 }
 
 export interface ToolListResponse {

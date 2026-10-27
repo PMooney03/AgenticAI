@@ -12,7 +12,7 @@ from typing import Any
 
 from app.agent.routing import decide_plan
 from app.agent.state import AgentState, WorkflowStep, append_step
-from app.agent.tools.policy import TOOLS, execute_tool, list_tools
+from app.agent.tools.policy import TOOLS, ToolRunner, execute_tool, list_tools
 from app.llm.base import ChatMessage, LLMProvider, LLMResult
 from app.prompts import get_prompt
 from app.rag.context import build_context
@@ -71,6 +71,7 @@ def _accumulate_usage(state: AgentState, result: LLMResult) -> dict[str, Any]:
 class NodeFns:
     llm: LLMProvider
     retriever: Retriever
+    mcp: ToolRunner
 
     async def plan(self, state: AgentState) -> dict[str, Any]:
         prompt = get_prompt("agent-planner")
@@ -131,7 +132,7 @@ class NodeFns:
         args = state.get("tool_args") or {}
         spec = TOOLS.get(name)
         try:
-            output = execute_tool(name, args)
+            output = await execute_tool(name, args, client=self.mcp)
             ok = True
         except ValueError as exc:
             output = str(exc)

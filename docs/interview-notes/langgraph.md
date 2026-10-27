@@ -58,8 +58,8 @@ START -> plan
   Evaluate is a heuristic (evidence present? both actions tried? budget hit?), not another
   LLM call.
 - `app/agent/graph.py` - `StateGraph` compile + `Agent.run()`.
-- `app/agent/tools/` - AST calculator on an allowlist. Phase 5 will add MCP tools to the
-  same registry.
+- `app/agent/tools/` - allowlist (`calculator`, `clock`). Execution is MCP
+  (`app/mcp/`), not a Python import inside the graph.
 - `POST /chat` always runs the graph. `GET /agent/tools` lists the allowlist.
   `GET /agent/trace/{request_id}` returns nodes, labels, tool names and chunk counts —
   never questions, answers, document text or planner JSON.

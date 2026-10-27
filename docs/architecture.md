@@ -38,7 +38,7 @@ flowchart TD
 | CORS | Allowlisted Vite origin; `X-Request-ID` exposed to the browser | Phase 3 |
 | LangGraph | Stateful plan / retrieve / tool / evaluate loop with conditional routing | Phase 4 |
 | Trace store | In-memory high-level steps keyed by request ID (no content) | Phase 4 |
-| MCP server + client | Allowlisted local tools over a standard protocol | Phase 5 *(planned)* |
+| MCP server + client | Allowlisted calculator + clock over official `mcp` SDK | Phase 5 |
 | Human-in-the-loop | `interrupt()` on state-changing tools, approve/reject endpoint | Phase 6 *(planned)* |
 | Evaluation | Local dataset, retrieval and groundedness metrics | Phase 7 *(planned)* |
 | Docker Compose + CI | `frontend`, `backend`, `qdrant`; GitHub Actions lint/test/build | Phase 8 *(planned)* |
@@ -135,7 +135,7 @@ sequenceDiagram
 flowchart TD
     Start([question]) --> plan[plan: structured output -> action]
     plan -->|retrieve| retrieve[retrieve_documents]
-    plan -->|tool| call_tool[call_tool: allowlisted calculator]
+    plan -->|tool| call_tool[call_tool: allowlisted MCP tools]
     plan -->|answer| answer[generate_answer]
     retrieve --> evaluate[evaluate: enough evidence?]
     call_tool --> evaluate
@@ -147,6 +147,26 @@ flowchart TD
 State carried through the graph: `question`, `history`, `steps[]` (high-level trace shown
 to the user), `chunks[]`, `tool_results[]`, `step_count`, `answer`, `sources`.
 Human-approval interrupts (`pending_approval`) arrive in Phase 6.
+
+## Tool calls (Phase 5)
+
+```mermaid
+sequenceDiagram
+    participant G as call_tool node
+    participant P as allowlist
+    participant C as InProcessMCPClient
+    participant S as MCPServer
+
+    G->>P: name in TOOLS?
+    P-->>G: yes / clamp to answer
+    G->>C: call_tool(name, args)
+    C->>S: tools/call (MCP)
+    S-->>C: text or is_error
+    C-->>G: str result
+```
+
+Default transport is in-process (`Client(server)`). `python -m app.mcp` serves the same
+tools over stdio.
 
 ## Guiding simplifications
 

@@ -20,6 +20,7 @@ from langgraph.graph import END, START, StateGraph
 from app.agent.nodes import NodeFns
 from app.agent.routing import route_after_evaluate, route_after_plan
 from app.agent.state import AgentState, WorkflowStep, initial_state
+from app.agent.tools.policy import ToolRunner
 from app.llm.base import LLMProvider
 from app.retrieval.retriever import Retriever
 
@@ -80,12 +81,18 @@ class Agent:
         *,
         llm: LLMProvider,
         retriever: Retriever,
+        tools: ToolRunner | None = None,
         max_steps: int = 3,
     ) -> None:
         self._llm = llm
         self._retriever = retriever
         self._max_steps = max_steps
-        self._app = build_graph(NodeFns(llm=llm, retriever=retriever))
+        if tools is None:
+            from app.mcp.client import InProcessMCPClient
+            from app.mcp.server import get_mcp_server
+
+            tools = InProcessMCPClient(get_mcp_server())
+        self._app = build_graph(NodeFns(llm=llm, retriever=retriever, mcp=tools))
 
     async def run(
         self,

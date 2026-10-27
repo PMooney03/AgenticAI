@@ -13,6 +13,14 @@ vi.mock('../api/client', () => ({
           description: 'arithmetic',
           read_only: true,
           requires_approval: false,
+          source: 'mcp' as const,
+        },
+        {
+          name: 'clock',
+          description: 'local time',
+          read_only: true,
+          requires_approval: false,
+          source: 'mcp' as const,
         },
       ],
     })),
@@ -32,7 +40,7 @@ describe('AgentActivity', () => {
     expect(screen.getByText('Analysed request')).toBeInTheDocument()
     expect(screen.getByText('Retrieved 3 chunks')).toBeInTheDocument()
     expect(screen.getByText(/never chain-of-thought/i)).toBeInTheDocument()
-    expect(await screen.findByTestId('tool-list')).toHaveTextContent('calculator')
+    expect(await screen.findByTestId('tool-list')).toHaveTextContent('calculator, clock')
     await userEvent.click(screen.getByRole('button', { name: /agent activity/i }))
     expect(screen.queryByText('Analysed request')).not.toBeInTheDocument()
   })

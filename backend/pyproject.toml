@@ -12,6 +12,7 @@ dependencies = [
     "langgraph>=1.2.18",
     "llama-index-core>=0.14.25",
     "llama-index-readers-file>=0.7.0",
+    "mcp>=2.3.0",
     "pydantic-settings>=2.16.1",
     "pypdf>=6.21.3",
     "python-multipart>=0.0.32",
@@ -47,6 +48,10 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
+# pywin32 DLL path must be set before the MCP SDK import.
+"app/mcp/__init__.py" = ["E402"]
+"app/mcp/client.py" = ["E402"]
+"app/mcp/server.py" = ["E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

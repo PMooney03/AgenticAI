@@ -5,8 +5,8 @@ traditional RAG "second brain" into a LangGraph-driven agent that decides when t
 documents, when to call tools (via MCP), and when to keep reasoning through a multi-step
 workflow, with human approval for anything that changes state.
 
-> Status: **Phase 4 complete** - a LangGraph agent decides retrieve vs calculator vs
-> answer, and the UI shows the real high-level workflow trace.
+> Status: **Phase 5 complete** - the LangGraph agent calls allowlisted tools over MCP
+> (calculator and clock). The UI shows the real high-level workflow trace.
 > See [Build phases](#build-phases) for what comes next.
 
 ## Table of contents
@@ -96,7 +96,7 @@ data flow.
 | Vector DB | Qdrant in Docker | Cosine similarity search over chunk embeddings with metadata payloads |
 | Registry | SQLite (stdlib) | Document list, status, chunk/page counts |
 | Agent | LangGraph | Stateful, inspectable workflow with conditional routing |
-| Tools | MCP (Phase 5) | Standard protocol for exposing allowlisted local tools |
+| Tools | MCP (`mcp` 2.x) | Allowlisted local tools over the Model Context Protocol |
 | Frontend | React, TypeScript, Vite | Sidebar, chat, source citations, LangGraph activity panel |
 | Infra | Docker Compose, GitHub Actions (Phase 8) | Local orchestration and CI |
 
@@ -109,7 +109,7 @@ data flow.
 | 2 | Document ingestion (LlamaIndex) + local embeddings + Qdrant + grounded RAG with citations | Done |
 | 3 | React frontend (upload, chat, sources, activity placeholder) | Done |
 | 4 | LangGraph agent | Done |
-| 5 | MCP tools | Planned |
+| 5 | MCP tools | Done |
 | 6 | Human-in-the-loop approval | Planned |
 | 7 | Logging, metrics, evaluation (LLMOps) | Planned |
 | 8 | Docker Compose + CI/CD hardening | Planned |
@@ -133,7 +133,7 @@ docker compose up -d qdrant
 # Backend
 cd backend
 uv sync
-uv run uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --reload-exclude .venv --port 8000
 
 # Frontend (new terminal)
 cd frontend
@@ -157,7 +157,7 @@ backend with `--port 8010` and set `VITE_API_BASE_URL=http://localhost:8010` in
 | GET | `/documents/{id}` | One document |
 | DELETE | `/documents/{id}` | Remove the document, its chunks in Qdrant and the stored file |
 | POST | `/chat` | Ask a question. LangGraph plans retrieve / tool / answer. `use_documents` (default `true`) allows retrieval |
-| GET | `/agent/tools` | Allowlisted tools the planner may name |
+| GET | `/agent/tools` | Allowlisted MCP tools (`calculator`, `clock`) |
 | GET | `/agent/trace/{request_id}` | High-level nodes and labels for a recent chat (no content) |
 
 Example:
@@ -211,9 +211,9 @@ When the documents do not cover the question the model is instructed to say so:
 upload  : file -> validate -> LlamaIndex PDFReader (per page) -> SentenceSplitter (400 tok, 60 overlap)
           -> nomic-embed-text -> Qdrant upsert (vector + text + document/page payload) -> registry "ready"
 
-question: LangGraph plan -> (retrieve | calculator | answer)
+question: LangGraph plan -> (retrieve | MCP tool | answer)
           retrieve: nomic-embed-text -> Qdrant top-k -> rag-system-v1 -> cited answer
-          calculator: AST arithmetic -> agent-answer-v1
+          calculator / clock: MCP tools/call -> agent-answer-v1
           answer: chat-system-v1 when no retrieval was needed
 ```
 
@@ -292,7 +292,8 @@ backend/
     ingestion/           loaders (LlamaIndex PDFReader), chunking (SentenceSplitter), SQLite registry, service
     retrieval/           VectorStore protocol, QdrantVectorStore, Retriever
     rag/                 context builder (sources + delimiters), RAGPipeline
-    agent/               LangGraph state, nodes, routing, AST calculator, in-memory traces
+    agent/               LangGraph state, nodes, routing, tool allowlist, in-memory traces
+    mcp/                 MCPServer (calculator, clock) + in-process Client; `python -m app.mcp` for stdio
     security/            upload validation, safe filenames
     prompts/             versioned prompts (chat, rag, agent-planner, agent-answer) + registry
     observability/       request-ID middleware, structured JSON logging
@@ -335,6 +336,8 @@ data/                    (gitignored) uploads/, qdrant/, registry.db
 - **LangGraph as an explicit state machine.** Routing lives in Python (`decide_plan`,
   `route_after_evaluate`), tools are allowlisted, evaluate is a heuristic (not another
   LLM call), and the UI only sees high-level step labels.
+- **MCP for tools.** The graph names an allowlisted tool; an MCP client calls the local
+  server. FastAPI uses the SDK in-memory transport; `python -m app.mcp` is stdio.
 
 Security and privacy decisions are documented in [docs/security.md](docs/security.md).
 
@@ -350,11 +353,12 @@ Short explainers for each technology, written as it enters the project:
 - [LlamaIndex](docs/interview-notes/llamaindex.md)
 - [React and Vite](docs/interview-notes/react-vite.md)
 - [LangGraph](docs/interview-notes/langgraph.md)
+- [MCP](docs/interview-notes/mcp.md)
 
 ## Roadmap sections
 
 The following README sections will be filled in by later phases: LangChain role in depth,
-MCP explanation, human-in-the-loop design, LLMOps features and evaluation, Docker setup
+human-in-the-loop design, LLMOps features and evaluation, Docker setup
 for all services, screenshots, CI/CD, limitations, future improvements, and an Azure
 mapping of each local component.
 

@@ -21,6 +21,7 @@ async def agent_tools() -> ToolListResponse:
                 description=spec.description,
                 read_only=spec.read_only,
                 requires_approval=spec.requires_approval,
+                source=spec.source,
             )
             for spec in list_tools()
         ]

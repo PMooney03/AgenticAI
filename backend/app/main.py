@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
+    # Warm MCP on the main thread so Windows pywin32 is loaded before any request.
+    from app.mcp.server import get_mcp_server
+    from app.mcp.windows import ensure_pywin32
+
+    ensure_pywin32()
+    get_mcp_server()
     logger.info(
         "app_started",
         extra={
@@ -72,9 +78,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "Local, agentic second brain. Phase 4: a LangGraph agent decides whether to "
-            "retrieve documents, call an allowlisted tool, or answer, then returns sources "
-            "and a high-level workflow trace."
+            "Local, agentic second brain. Phase 5: a LangGraph agent decides whether to "
+            "retrieve documents, call an allowlisted MCP tool, or answer, then returns "
+            "sources and a high-level workflow trace."
         ),
         lifespan=_lifespan,
     )

@@ -8,6 +8,7 @@ class ToolInfo(BaseModel):
     description: str
     read_only: bool
     requires_approval: bool
+    source: str = "mcp"
 
 
 class ToolListResponse(BaseModel):

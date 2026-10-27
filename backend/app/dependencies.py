@@ -111,11 +111,20 @@ def get_rag_pipeline(retriever: RetrieverDep, llm: LLMProviderDep) -> RAGPipelin
 RAGPipelineDep = Annotated[RAGPipeline, Depends(get_rag_pipeline)]
 
 
-def get_agent(settings: SettingsDep, retriever: RetrieverDep, llm: LLMProviderDep):
+async def get_agent(settings: SettingsDep, retriever: RetrieverDep, llm: LLMProviderDep):
     # Imported here so retrieval/RAG finish loading before the graph (avoids a cycle).
+    # Async so FastAPI does not run this in a threadpool — the first MCP import must
+    # happen on the event-loop thread (Windows pywin32).
     from app.agent.graph import Agent
+    from app.mcp.client import InProcessMCPClient
+    from app.mcp.server import get_mcp_server
 
-    return Agent(llm=llm, retriever=retriever, max_steps=settings.agent_max_steps)
+    return Agent(
+        llm=llm,
+        retriever=retriever,
+        tools=InProcessMCPClient(get_mcp_server()),
+        max_steps=settings.agent_max_steps,
+    )
 
 
 AgentDep = Annotated[object, Depends(get_agent)]

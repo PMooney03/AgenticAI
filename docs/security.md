@@ -79,11 +79,13 @@ errors with logs.
 
 Deleting a document removes it from all three.
 
-## Agent tools and traces (Phase 4)
+## Agent tools and traces (Phases 4-5)
 
 - The planner can only name tools in `app/agent/tools/policy.py`. Unknown names are clamped
-  to `answer` before anything runs. The calculator evaluates an AST of `+ - * / // % **`
-  and numeric constants; it cannot call names, attributes or Python builtins.
+  to `answer` before anything runs, and `execute_tool` refuses them before an MCP
+  `tools/call`. The calculator evaluates an AST of `+ - * / // % **` and numeric constants;
+  it cannot call names, attributes or Python builtins. The clock is read-only. There is no
+  shell. Write tools are reserved for Phase 6 (`requires_approval`).
 - `GET /agent/trace/{id}` and `ChatResponse.workflow` expose high-level labels
   (`Analysed request`, `Used calculator tool`). They do not store the question, the answer,
   chunk text, tool arguments or the planner's raw JSON.

@@ -93,7 +93,13 @@ describe('createClient', () => {
       return new Response(
         JSON.stringify({
           tools: [
-            { name: 'calculator', description: 'math', read_only: true, requires_approval: false },
+            {
+              name: 'calculator',
+              description: 'math',
+              read_only: true,
+              requires_approval: false,
+              source: 'mcp',
+            },
           ],
         }),
         { status: 200 },

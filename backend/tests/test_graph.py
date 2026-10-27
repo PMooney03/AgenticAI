@@ -9,6 +9,7 @@ PLAN_TOOL = (
     '{"action": "tool", "tool_name": "calculator", "tool_args": {"expression": "12 * (3 + 4)"}}'
 )
 PLAN_ANSWER = '{"action": "answer", "tool_name": null, "tool_args": {}}'
+PLAN_CLOCK = '{"action": "tool", "tool_name": "clock", "tool_args": {}}'
 
 
 async def _agent(
@@ -62,6 +63,18 @@ async def test_graph_calls_calculator(fake_embeddings: FakeEmbeddingProvider) ->
     assert "call_tool" in result.nodes_visited
     assert any("calculator" in step["label"] for step in result.steps)
     assert "84" in llm.calls[1][0].content
+    assert result.prompt_version == "agent-answer-v1"
+
+
+async def test_graph_calls_clock_over_mcp(fake_embeddings: FakeEmbeddingProvider) -> None:
+    llm = FakeLLMProvider(replies=[PLAN_CLOCK, "It is currently that time."])
+    agent = await _agent(llm, fake_embeddings)
+
+    result = await agent.run(question="what time is it?", history=[], use_documents=False)
+
+    assert result.tool_names == ["clock"]
+    assert "T" in result.tool_calls[0]["output"]
+    assert "clock" in llm.calls[1][0].content
     assert result.prompt_version == "agent-answer-v1"
 
 
