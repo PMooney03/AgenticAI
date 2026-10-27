@@ -11,6 +11,7 @@ export default defineConfig({
       '/health': backend,
       '/chat': backend,
       '/documents': backend,
+      '/agent': backend,
     },
   },
   test: {

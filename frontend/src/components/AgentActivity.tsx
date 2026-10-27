@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import type { WorkflowEvent } from '../lib/workflow'
+import { api } from '../api/client'
+import type { ToolInfo, WorkflowEvent } from '../api/types'
 
 interface AgentActivityProps {
   events: WorkflowEvent[]
@@ -8,6 +9,22 @@ interface AgentActivityProps {
 
 export function AgentActivity({ events }: AgentActivityProps) {
   const [open, setOpen] = useState(true)
+  const [tools, setTools] = useState<ToolInfo[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    void api
+      .listTools()
+      .then((result) => {
+        if (!cancelled) {
+          setTools(result.tools)
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <section className="panel activity" data-testid="agent-activity">
@@ -34,8 +51,13 @@ export function AgentActivity({ events }: AgentActivityProps) {
           </ol>
         )
       ) : null}
+      {tools.length > 0 ? (
+        <p className="footnote" data-testid="tool-list">
+          Tools: {tools.map((tool) => tool.name).join(', ')}
+        </p>
+      ) : null}
       <p className="footnote">
-        Placeholder for the LangGraph trace (Phase 4). Only observable steps, never chain-of-thought.
+        Steps come from the LangGraph run. Only observable actions, never chain-of-thought.
       </p>
     </section>
   )

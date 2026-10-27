@@ -20,6 +20,15 @@ def test_versions_are_unique_and_follow_naming_convention() -> None:
         assert p.version.startswith(f"{p.name}-v"), p.version
 
 
+def test_agent_prompts_are_registered() -> None:
+    planner = get_prompt("agent-planner")
+    answer = get_prompt("agent-answer")
+    assert planner.version == "agent-planner-v1"
+    assert planner.variables == {"tool_names", "documents_allowed", "evidence"}
+    assert answer.version == "agent-answer-v1"
+    assert answer.variables == {"tool_results", "context"}
+
+
 def test_unknown_prompt_raises() -> None:
     with pytest.raises(PromptNotFoundError):
         get_prompt("does-not-exist")

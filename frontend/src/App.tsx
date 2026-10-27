@@ -8,7 +8,7 @@ import { SourcePanel } from './components/SourcePanel'
 import { useChat } from './hooks/useChat'
 import { useDocuments } from './hooks/useDocuments'
 import { useHealth } from './hooks/useHealth'
-import { workflowEvents } from './lib/workflow'
+import { pendingWorkflow } from './lib/workflow'
 
 export default function App() {
   const documents = useDocuments()
@@ -17,11 +17,7 @@ export default function App() {
   const [activeLabel, setActiveLabel] = useState<number | null>(null)
 
   const sources = chat.selected?.sources ?? []
-  const events = workflowEvents(
-    chat.sending ? (chat.useDocuments ? 'rag' : 'chat') : chat.selected?.mode,
-    chat.selected?.retrieval,
-    chat.sending,
-  )
+  const events = chat.sending ? pendingWorkflow() : (chat.selected?.workflow ?? [])
 
   return (
     <div className="shell">

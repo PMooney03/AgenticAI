@@ -5,6 +5,7 @@ import type {
   DocumentListResponse,
   DocumentRecord,
   HealthResponse,
+  ToolListResponse,
 } from './types'
 
 export { ApiError } from './types'
@@ -101,6 +102,7 @@ export function createClient(options: ClientOptions = {}) {
           history: trimHistory(payload.history),
         }),
       }),
+    listTools: () => request<ToolListResponse>('/agent/tools'),
   }
 }
 

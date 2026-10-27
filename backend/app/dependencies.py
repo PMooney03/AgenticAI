@@ -111,6 +111,16 @@ def get_rag_pipeline(retriever: RetrieverDep, llm: LLMProviderDep) -> RAGPipelin
 RAGPipelineDep = Annotated[RAGPipeline, Depends(get_rag_pipeline)]
 
 
+def get_agent(settings: SettingsDep, retriever: RetrieverDep, llm: LLMProviderDep):
+    # Imported here so retrieval/RAG finish loading before the graph (avoids a cycle).
+    from app.agent.graph import Agent
+
+    return Agent(llm=llm, retriever=retriever, max_steps=settings.agent_max_steps)
+
+
+AgentDep = Annotated[object, Depends(get_agent)]
+
+
 def get_ingestion_service(
     settings: SettingsDep,
     registry: DocumentRegistryDep,

@@ -8,6 +8,13 @@ MAX_HISTORY_TURNS = 20
 ChatMode = Literal["rag", "chat"]
 
 
+class WorkflowEvent(BaseModel):
+    id: str
+    node: str
+    label: str
+    done: bool = True
+
+
 class HistoryMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -66,6 +73,10 @@ class ChatResponse(BaseModel):
     retrieval: RetrievalStats | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    workflow: list[WorkflowEvent] = Field(
+        default_factory=list,
+        description="High-level LangGraph steps. Never includes chain-of-thought.",
+    )
 
 
 class ErrorResponse(BaseModel):

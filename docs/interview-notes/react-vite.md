@@ -42,9 +42,8 @@ collapsible activity panel in sync. Components plus typed API calls do.
 - `Chat` - user/assistant bubbles, loading state, `[Source N]` rendered as buttons that
   highlight the matching card.
 - `SourcePanel` - filename, page, cosine score, cited vs retrieved, expandable snippet.
-- `AgentActivity` - high-level events derived from the response (`Retrieved 4 chunks`).
-  Phase 4 will replace the derivation with the LangGraph trace. Hidden chain-of-thought
-  is never shown.
+- `AgentActivity` - renders `ChatResponse.workflow` from the LangGraph run and lists
+  allowlisted tools from `GET /agent/tools`. Hidden chain-of-thought is never shown.
 - `ApprovalCard` - present but unused until Phase 6.
 - CORS on the backend (`CORS_ORIGINS`) plus `VITE_API_BASE_URL` so the UI can talk to
   whatever port the API is on.
@@ -53,7 +52,5 @@ collapsible activity panel in sync. Components plus typed API calls do.
 
 "The UI is a thin client over the FastAPI contract. I kept the API client injectable so
 component tests never need a running backend, and I split citations in the answer into
-buttons that select the corresponding source card. The activity panel is deliberately
-dumb in Phase 3: it only reports facts the API already returns (mode, chunk count), which
-is the same information I will later stream from LangGraph nodes. That keeps the
-responsible-AI rule — no hidden reasoning on screen — in place from day one."
+buttons that select the corresponding source card. The activity panel only renders
+high-level LangGraph steps the API already returns — never hidden reasoning."

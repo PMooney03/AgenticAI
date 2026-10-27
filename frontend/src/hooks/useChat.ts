@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 
 import { ApiError, api } from '../api/client'
-import type { ChatMode, RetrievalStats, Source } from '../api/types'
+import type { ChatMode, RetrievalStats, Source, WorkflowEvent } from '../api/types'
 
 export interface ChatMessage {
   id: string
@@ -14,6 +14,7 @@ export interface ChatMessage {
   promptVersion?: string
   requestId?: string
   latencyMs?: number
+  workflow?: WorkflowEvent[]
 }
 
 function nextId(): string {
@@ -63,6 +64,7 @@ export function useChat() {
           promptVersion: result.prompt_version,
           requestId: result.request_id,
           latencyMs: result.latency_ms,
+          workflow: result.workflow,
         }
         setMessages((current) => [...current, assistant])
         setSelectedId(assistant.id)

@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     retrieval_top_k: int = Field(default=4, ge=1, le=20)
     retrieval_score_threshold: float = Field(default=0.0, ge=-1.0, le=1.0)
 
+    # --- Agent (LangGraph) --------------------------------------------------
+    agent_max_steps: int = Field(default=3, ge=1, le=8)
+
     @field_validator("ollama_model", "embedding_model", "qdrant_collection")
     @classmethod
     def _not_blank(cls, value: str) -> str:

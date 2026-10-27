@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.28.1",
     "langchain-core>=1.7.0",
     "langchain-ollama>=1.1.0",
+    "langgraph>=1.2.18",
     "llama-index-core>=0.14.25",
     "llama-index-readers-file>=0.7.0",
     "pydantic-settings>=2.16.1",

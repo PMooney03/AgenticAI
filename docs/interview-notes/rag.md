@@ -15,8 +15,8 @@ question -> embed -> vector search -> top-k chunks -> grounded prompt -> LLM -> 
 - The user's documents are private and change often; fine-tuning a model on them is slow,
   expensive, and still hallucinates. Retrieval is instant and always current.
 - Answers come with sources (file, page), which the user can verify.
-- It is the foundation the agent builds on: in Phase 4 "retrieve" becomes one of several
-  actions the agent can choose, instead of something that always happens.
+- It is the foundation the agent builds on: "retrieve" is one of several actions the
+  LangGraph planner can choose, instead of something that always happens.
 
 ## What problem it solves
 

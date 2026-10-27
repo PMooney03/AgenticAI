@@ -5,8 +5,8 @@ traditional RAG "second brain" into a LangGraph-driven agent that decides when t
 documents, when to call tools (via MCP), and when to keep reasoning through a multi-step
 workflow, with human approval for anything that changes state.
 
-> Status: **Phase 3 complete** - a React UI for upload, chat, source citations and a
-> high-level activity panel, talking to the local FastAPI + Qdrant + Ollama stack.
+> Status: **Phase 4 complete** - a LangGraph agent decides retrieve vs calculator vs
+> answer, and the UI shows the real high-level workflow trace.
 > See [Build phases](#build-phases) for what comes next.
 
 ## Table of contents
@@ -95,9 +95,9 @@ data flow.
 | Ingestion | LlamaIndex (`PDFReader`, `SentenceSplitter`) | Page-aware PDF loading and sentence-aware overlapping chunks |
 | Vector DB | Qdrant in Docker | Cosine similarity search over chunk embeddings with metadata payloads |
 | Registry | SQLite (stdlib) | Document list, status, chunk/page counts |
-| Agent | LangGraph (Phase 4) | Stateful, inspectable workflow with conditional routing |
+| Agent | LangGraph | Stateful, inspectable workflow with conditional routing |
 | Tools | MCP (Phase 5) | Standard protocol for exposing allowlisted local tools |
-| Frontend | React, TypeScript, Vite | Sidebar, chat, source citations, agent-activity placeholder |
+| Frontend | React, TypeScript, Vite | Sidebar, chat, source citations, LangGraph activity panel |
 | Infra | Docker Compose, GitHub Actions (Phase 8) | Local orchestration and CI |
 
 ## Build phases
@@ -108,7 +108,7 @@ data flow.
 | 1 | FastAPI + Ollama chat, provider abstraction, prompt versioning, tests | Done |
 | 2 | Document ingestion (LlamaIndex) + local embeddings + Qdrant + grounded RAG with citations | Done |
 | 3 | React frontend (upload, chat, sources, activity placeholder) | Done |
-| 4 | LangGraph agent | Planned |
+| 4 | LangGraph agent | Done |
 | 5 | MCP tools | Planned |
 | 6 | Human-in-the-loop approval | Planned |
 | 7 | Logging, metrics, evaluation (LLMOps) | Planned |
@@ -156,7 +156,9 @@ backend with `--port 8010` and set `VITE_API_BASE_URL=http://localhost:8010` in
 | GET | `/documents` | List documents with status (`processing` / `ready` / `failed`) and counts |
 | GET | `/documents/{id}` | One document |
 | DELETE | `/documents/{id}` | Remove the document, its chunks in Qdrant and the stored file |
-| POST | `/chat` | Ask a question. `use_documents` (default `true`) grounds the answer in retrieved chunks |
+| POST | `/chat` | Ask a question. LangGraph plans retrieve / tool / answer. `use_documents` (default `true`) allows retrieval |
+| GET | `/agent/tools` | Allowlisted tools the planner may name |
+| GET | `/agent/trace/{request_id}` | High-level nodes and labels for a recent chat (no content) |
 
 Example:
 
@@ -187,7 +189,14 @@ Response (abridged):
       "cited": true
     }
   ],
-  "retrieval": { "retrieved_chunks": 4, "retrieval_ms": 296, "cited_sources": 1 }
+  "retrieval": { "retrieved_chunks": 4, "retrieval_ms": 296, "cited_sources": 1 },
+  "workflow": [
+    { "id": "plan-0", "node": "plan", "label": "Analysed request", "done": true },
+    { "id": "retrieve-1", "node": "retrieve", "label": "Searched documents", "done": true },
+    { "id": "retrieve-2", "node": "retrieve", "label": "Retrieved 4 chunks", "done": true },
+    { "id": "evaluate-3", "node": "evaluate", "label": "Evaluated results", "done": true },
+    { "id": "answer-4", "node": "generate_answer", "label": "Generated response", "done": true }
+  ]
 }
 ```
 
@@ -202,9 +211,10 @@ When the documents do not cover the question the model is instructed to say so:
 upload  : file -> validate -> LlamaIndex PDFReader (per page) -> SentenceSplitter (400 tok, 60 overlap)
           -> nomic-embed-text -> Qdrant upsert (vector + text + document/page payload) -> registry "ready"
 
-question: text -> nomic-embed-text -> Qdrant top-k by cosine -> "[Source N] file, page P <<< text >>>"
-          -> rag-system-v1 prompt -> qwen2.5:14b -> answer with [Source N] citations
-          -> API maps citations back to sources, flags which were actually cited
+question: LangGraph plan -> (retrieve | calculator | answer)
+          retrieve: nomic-embed-text -> Qdrant top-k -> rag-system-v1 -> cited answer
+          calculator: AST arithmetic -> agent-answer-v1
+          answer: chat-system-v1 when no retrieval was needed
 ```
 
 The grounding prompt (`rag-system-v1`) instructs the model to answer only from the excerpts,
@@ -220,7 +230,7 @@ Full explanation: [docs/interview-notes/rag.md](docs/interview-notes/rag.md).
 | PDF loading with page numbers, sentence-aware chunking | LlamaIndex | Best-in-class for the data side; stops there so embed/store/search stay explicit |
 | LLM client, prompts, (later) tool definitions and structured output | LangChain | Standard interfaces; no chains or agent executors that would hide control flow |
 | Embeddings, vector store, retrieval, RAG pipeline | Our own code | Small, explicit, testable with fakes and Qdrant's in-memory mode |
-| Agent orchestration (Phase 4) | LangGraph | Explicit state machine with conditional routing and interrupts |
+| Agent orchestration | LangGraph | Explicit state machine: plan → retrieve / tool / answer, evaluate, bounded loop |
 
 Details: [LlamaIndex](docs/interview-notes/llamaindex.md),
 [embeddings](docs/interview-notes/embeddings.md),
@@ -260,10 +270,11 @@ npm run build
 ```
 
 Backend coverage: config, prompt registry, upload validation, loaders, chunking, registry,
-Qdrant, retriever, RAG pipeline, CORS, every API endpoint, mocked Ollama/embeddings.
+Qdrant, retriever, RAG pipeline, LangGraph routing/tools/graph, CORS, every API endpoint,
+mocked Ollama/embeddings.
 
-Frontend coverage: API client (request IDs, multipart upload, error parsing), citation
-splitting, workflow-event derivation, source panel and agent-activity rendering.
+Frontend coverage: API client (request IDs, multipart upload, error parsing, tools),
+citation splitting, source panel and agent-activity rendering of graph events.
 
 ## Project structure
 
@@ -281,8 +292,9 @@ backend/
     ingestion/           loaders (LlamaIndex PDFReader), chunking (SentenceSplitter), SQLite registry, service
     retrieval/           VectorStore protocol, QdrantVectorStore, Retriever
     rag/                 context builder (sources + delimiters), RAGPipeline
+    agent/               LangGraph state, nodes, routing, AST calculator, in-memory traces
     security/            upload validation, safe filenames
-    prompts/             versioned system prompts (chat-system-v1, rag-system-v1) + registry
+    prompts/             versioned prompts (chat, rag, agent-planner, agent-answer) + registry
     observability/       request-ID middleware, structured JSON logging
   tests/
 frontend/
@@ -290,7 +302,7 @@ frontend/
     api/                 typed client + ApiError
     components/          Sidebar, Chat, SourcePanel, AgentActivity, ApprovalCard
     hooks/               documents, chat, health
-    lib/                 citation parser, workflow events
+    lib/                 citation parser, pending workflow placeholder
   tests live next to the modules they cover (Vitest)
 docs/
   architecture.md  security.md
@@ -320,6 +332,9 @@ data/                    (gitignored) uploads/, qdrant/, registry.db
   instead of corrupting search.
 - **Offline-safe chunking.** `SentenceSplitter` is given a cheap tokenizer and a regex
   sentence splitter, so ingestion needs no tiktoken download or NLTK data at runtime.
+- **LangGraph as an explicit state machine.** Routing lives in Python (`decide_plan`,
+  `route_after_evaluate`), tools are allowlisted, evaluate is a heuristic (not another
+  LLM call), and the UI only sees high-level step labels.
 
 Security and privacy decisions are documented in [docs/security.md](docs/security.md).
 
@@ -334,13 +349,14 @@ Short explainers for each technology, written as it enters the project:
 - [Vector databases and Qdrant](docs/interview-notes/vector-databases-qdrant.md)
 - [LlamaIndex](docs/interview-notes/llamaindex.md)
 - [React and Vite](docs/interview-notes/react-vite.md)
+- [LangGraph](docs/interview-notes/langgraph.md)
 
 ## Roadmap sections
 
-The following README sections will be filled in by later phases: LangGraph workflow,
-LangChain role in depth, MCP explanation, human-in-the-loop design, LLMOps features and
-evaluation, Docker setup for all services, screenshots, CI/CD, limitations, future
-improvements, and an Azure mapping of each local component.
+The following README sections will be filled in by later phases: LangChain role in depth,
+MCP explanation, human-in-the-loop design, LLMOps features and evaluation, Docker setup
+for all services, screenshots, CI/CD, limitations, future improvements, and an Azure
+mapping of each local component.
 
 ## Screenshots
 

@@ -10,7 +10,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import chat, documents, health
+from app.agent.trace import TraceStore
+from app.api import agent, chat, documents, health
 from app.config import Settings, get_settings
 from app.observability import RequestContextMiddleware, configure_logging
 
@@ -71,13 +72,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "Local, agentic second brain. Phase 3: upload PDF/TXT/Markdown documents, index "
-            "them in Qdrant with local embeddings, and ask grounded questions with sources "
-            "from a React UI."
+            "Local, agentic second brain. Phase 4: a LangGraph agent decides whether to "
+            "retrieve documents, call an allowlisted tool, or answer, then returns sources "
+            "and a high-level workflow trace."
         ),
         lifespan=_lifespan,
     )
     app.state.settings = settings
+    app.state.traces = TraceStore()
 
     app.add_middleware(RequestContextMiddleware)
     # CORS is added last so it is the outermost middleware (handles OPTIONS preflight).
@@ -95,6 +97,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(chat.router)
     app.include_router(documents.router)
+    app.include_router(agent.router)
     return app
 
 

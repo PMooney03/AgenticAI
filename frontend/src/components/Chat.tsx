@@ -105,10 +105,12 @@ export function Chat({
             ) : (
               <p className="bubble-body">{message.content}</p>
             )}
-            {message.role === 'assistant' && message.retrieval ? (
+            {message.role === 'assistant' && (message.latencyMs != null || message.retrieval) ? (
               <p className="bubble-meta">
-                {message.retrieval.retrieved_chunks} chunks · {message.latencyMs} ms ·{' '}
-                {message.promptVersion}
+                {message.retrieval
+                  ? `${message.retrieval.retrieved_chunks} chunks · `
+                  : ''}
+                {message.latencyMs} ms · {message.promptVersion}
               </p>
             ) : null}
           </article>
@@ -123,7 +125,7 @@ export function Chat({
                 <i />
                 <i />
               </span>
-              {useDocuments ? 'Searching documents and composing an answer…' : 'Thinking…'}
+              {useDocuments ? 'Planning, searching, and composing an answer…' : 'Planning and answering…'}
             </p>
           </article>
         ) : null}

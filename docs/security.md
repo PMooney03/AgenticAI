@@ -79,6 +79,16 @@ errors with logs.
 
 Deleting a document removes it from all three.
 
+## Agent tools and traces (Phase 4)
+
+- The planner can only name tools in `app/agent/tools/policy.py`. Unknown names are clamped
+  to `answer` before anything runs. The calculator evaluates an AST of `+ - * / // % **`
+  and numeric constants; it cannot call names, attributes or Python builtins.
+- `GET /agent/trace/{id}` and `ChatResponse.workflow` expose high-level labels
+  (`Analysed request`, `Used calculator tool`). They do not store the question, the answer,
+  chunk text, tool arguments or the planner's raw JSON.
+- Logs add node names, tool names and chunk counts; still no message bodies.
+
 ## Known gaps (to be addressed or documented in later phases)
 
 - No authentication: the API is intended for a single local user. Phase 8 documents how to

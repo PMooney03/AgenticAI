@@ -40,13 +40,16 @@ def test_chat_happy_path(client: TestClient, fake_llm: FakeLLMProvider) -> None:
     assert body["request_id"] == response.headers["X-Request-ID"]
     assert body["latency_ms"] >= 0
     assert body["prompt_tokens"] is not None
+    assert body["workflow"][0]["label"] == "Analysed request"
+    assert body["workflow"][-1]["label"] == "Generated response"
 
-    # The provider received exactly one call: system prompt + the user's message.
-    assert len(fake_llm.calls) == 1
-    sent = fake_llm.calls[0]
+    # Planner then final answer (plain chat: documents off, so a garbled plan becomes answer).
+    assert len(fake_llm.calls) == 2
+    sent = fake_llm.calls[1]
     assert sent[0].role == "system"
     assert sent[-1].role == "user"
     assert sent[-1].content == "What is a vector database?"
+    assert "Choose the next action" in fake_llm.calls[0][0].content
 
 
 def test_chat_forwards_history(client: TestClient, fake_llm: FakeLLMProvider) -> None:
@@ -59,7 +62,7 @@ def test_chat_forwards_history(client: TestClient, fake_llm: FakeLLMProvider) ->
         ],
     }
     assert client.post("/chat", json=payload).status_code == 200
-    roles = [m.role for m in fake_llm.calls[0]]
+    roles = [m.role for m in fake_llm.calls[1]]
     assert roles == ["system", "user", "assistant", "user"]
 
 

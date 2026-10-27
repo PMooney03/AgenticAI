@@ -67,6 +67,11 @@ describe('createClient', () => {
           retrieval: { retrieved_chunks: 1, retrieval_ms: 4, cited_sources: 1 },
           prompt_tokens: 10,
           completion_tokens: 5,
+          workflow: [
+            { id: 'plan-0', node: 'plan', label: 'Analysed request', done: true },
+            { id: 'retrieve-1', node: 'retrieve', label: 'Searched documents', done: true },
+            { id: 'answer-2', node: 'generate_answer', label: 'Generated response', done: true },
+          ],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json', 'X-Request-ID': 'abc' } },
       )
@@ -80,6 +85,24 @@ describe('createClient', () => {
     })
     expect(result.sources[0]?.document_name).toBe('handbook.md')
     expect(result.prompt_version).toBe('rag-system-v1')
+    expect(result.workflow.map((event) => event.label)).toContain('Searched documents')
+  })
+
+  it('lists allowlisted tools', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      return new Response(
+        JSON.stringify({
+          tools: [
+            { name: 'calculator', description: 'math', read_only: true, requires_approval: false },
+          ],
+        }),
+        { status: 200 },
+      )
+    })
+    const client = createClient({ baseUrl: 'http://api.test', fetch: fetchMock })
+    const result = await client.listTools()
+    expect(result.tools[0]?.name).toBe('calculator')
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('http://api.test/agent/tools')
   })
 
   it('uploads with multipart and no forced JSON content-type', async () => {

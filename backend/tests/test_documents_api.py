@@ -102,8 +102,9 @@ def test_chat_uses_documents_and_returns_sources(
     assert body["sources"][0]["document_name"] == "handbook.txt"
     assert body["sources"][0]["cited"] is True
     assert "annual leave" in body["sources"][0]["snippet"]
-    # Grounded context reached the model.
-    assert "annual leave" in fake_llm.calls[0][0].content
+    # Grounded context reached the answer call (call 0 is the planner).
+    assert "annual leave" in fake_llm.calls[1][0].content
+    assert any("Searched documents" in step["label"] for step in body["workflow"])
 
 
 def test_chat_can_bypass_documents(client: TestClient, fake_llm: FakeLLMProvider) -> None:

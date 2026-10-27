@@ -36,6 +36,13 @@ export interface RetrievalStats {
   cited_sources: number
 }
 
+export interface WorkflowEvent {
+  id: string
+  node: string
+  label: string
+  done: boolean
+}
+
 export interface ChatResponse {
   answer: string
   mode: ChatMode
@@ -47,6 +54,18 @@ export interface ChatResponse {
   retrieval: RetrievalStats | null
   prompt_tokens: number | null
   completion_tokens: number | null
+  workflow: WorkflowEvent[]
+}
+
+export interface ToolInfo {
+  name: string
+  description: string
+  read_only: boolean
+  requires_approval: boolean
+}
+
+export interface ToolListResponse {
+  tools: ToolInfo[]
 }
 
 export interface HistoryTurn {

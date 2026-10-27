@@ -16,6 +16,7 @@ def test_defaults_point_at_local_ollama(monkeypatch: pytest.MonkeyPatch) -> None
     assert s.ollama_model == "qwen2.5:14b"
     assert s.log_level == "INFO"
     assert s.cors_origin_list == ["http://localhost:5173", "http://127.0.0.1:5173"]
+    assert s.agent_max_steps == 3
 
 
 def test_cors_origins_are_split_and_trimmed() -> None:

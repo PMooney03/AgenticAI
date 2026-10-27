@@ -36,7 +36,8 @@ flowchart TD
 | `Retriever` + `RAGPipeline` | Embed question, search, build cited context, answer with sources | Phase 2 |
 | React UI | Sidebar (upload/status/delete), chat, source citations, activity placeholder | Phase 3 |
 | CORS | Allowlisted Vite origin; `X-Request-ID` exposed to the browser | Phase 3 |
-| LangGraph | Stateful plan / act / evaluate loop with conditional routing | Phase 4 *(planned)* |
+| LangGraph | Stateful plan / retrieve / tool / evaluate loop with conditional routing | Phase 4 |
+| Trace store | In-memory high-level steps keyed by request ID (no content) | Phase 4 |
 | MCP server + client | Allowlisted local tools over a standard protocol | Phase 5 *(planned)* |
 | Human-in-the-loop | `interrupt()` on state-changing tools, approve/reject endpoint | Phase 6 *(planned)* |
 | Evaluation | Local dataset, retrieval and groundedness metrics | Phase 7 *(planned)* |
@@ -73,44 +74,68 @@ sequenceDiagram
     A-->>C: 201 DocumentResponse
 ```
 
-## Question flow (Phase 2, `use_documents=true`)
+## Question flow (Phase 4)
 
 ```mermaid
 sequenceDiagram
     participant C as Client
     participant A as POST /chat
-    participant P as RAGPipeline
+    participant G as LangGraph Agent
+    participant P as plan (agent-planner-v1)
+    participant T as Retriever
+    participant K as calculator (AST)
+    participant L as OllamaProvider
+
+    C->>A: {message, history, use_documents}
+    A->>G: run(question, history)
+    G->>P: structured JSON action
+    alt retrieve
+        G->>T: embed + Qdrant search
+        T-->>G: chunks
+        G->>G: evaluate (heuristic)
+    else tool
+        G->>K: allowlisted expression
+        K-->>G: numeric result
+        G->>G: evaluate (heuristic)
+    else answer
+        G->>L: chat-system / rag-system / agent-answer
+    end
+    G-->>A: answer + sources + workflow steps
+    A-->>C: ChatResponse (mode rag|chat, workflow[], request_id)
+```
+
+`use_documents=false` clamps any `retrieve` decision to `answer`. Unknown tool names are
+also clamped. The inspectable trace (`GET /agent/trace/{request_id}`) stores node names and
+step labels only.
+
+## Question flow (Phase 2, always-retrieve RAG — still used inside the retrieve node)
+
+```mermaid
+sequenceDiagram
+    participant R as retrieve node
     participant T as Retriever
     participant E as LocalEmbeddingProvider
     participant Q as QdrantVectorStore
     participant X as build_context
-    participant L as OllamaProvider
+    participant L as generate_answer
 
-    C->>A: {message, history, top_k}
-    A->>P: answer(question, history)
-    P->>T: retrieve(question)
+    R->>T: retrieve(question)
     T->>E: embed_query (search_query: prefix)
     T->>Q: search(vector, top_k, cosine)
     Q-->>T: [RetrievedChunk(score, document, page, text)]
-    T-->>P: RetrievalResult(chunks, embedding_ms, search_ms)
-    P->>X: build_context(chunks)
-    X-->>P: "[Source N] file, page P <<< text >>>" + sources[]
-    P->>L: chat([rag-system-v1(context), ...history, question])
-    L-->>P: answer with [Source N] citations
-    P->>P: extract_citations -> cited labels
-    A-->>C: ChatResponse(answer, sources[cited flag], retrieval stats, prompt_version)
+    T-->>R: RetrievalResult(chunks)
+    L->>X: build_context(chunks)
+    X-->>L: "[Source N] file, page P <<< text >>>" + sources[]
+    L->>L: rag-system-v1 + extract_citations
 ```
 
-With `use_documents=false` the route skips retrieval and uses `chat-system-v1` (Phase 1
-behaviour).
-
-## Target agent graph (Phase 4, planned)
+## Agent graph (Phase 4)
 
 ```mermaid
 flowchart TD
     Start([question]) --> plan[plan: structured output -> action]
     plan -->|retrieve| retrieve[retrieve_documents]
-    plan -->|tool| call_tool[call_tool: approval interrupt if state-changing]
+    plan -->|tool| call_tool[call_tool: allowlisted calculator]
     plan -->|answer| answer[generate_answer]
     retrieve --> evaluate[evaluate: enough evidence?]
     call_tool --> evaluate
@@ -120,8 +145,8 @@ flowchart TD
 ```
 
 State carried through the graph: `question`, `history`, `steps[]` (high-level trace shown
-to the user), `retrieved_chunks[]`, `tool_results[]`, `step_count`, `pending_approval`,
-`final_answer`, `sources`.
+to the user), `chunks[]`, `tool_results[]`, `step_count`, `answer`, `sources`.
+Human-approval interrupts (`pending_approval`) arrive in Phase 6.
 
 ## Guiding simplifications
 
