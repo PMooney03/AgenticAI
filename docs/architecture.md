@@ -34,7 +34,8 @@ flowchart TD
 | `VectorStore` / `QdrantVectorStore` | Points: chunk UUID, vector, payload (document, page, text, metadata) | Phase 2 |
 | `DocumentRegistry` | SQLite table of documents with status and counts | Phase 2 |
 | `Retriever` + `RAGPipeline` | Embed question, search, build cited context, answer with sources | Phase 2 |
-| React UI | Sidebar, chat, sources, agent activity, approvals | Phase 3 *(planned)* |
+| React UI | Sidebar (upload/status/delete), chat, source citations, activity placeholder | Phase 3 |
+| CORS | Allowlisted Vite origin; `X-Request-ID` exposed to the browser | Phase 3 |
 | LangGraph | Stateful plan / act / evaluate loop with conditional routing | Phase 4 *(planned)* |
 | MCP server + client | Allowlisted local tools over a standard protocol | Phase 5 *(planned)* |
 | Human-in-the-loop | `interrupt()` on state-changing tools, approve/reject endpoint | Phase 6 *(planned)* |

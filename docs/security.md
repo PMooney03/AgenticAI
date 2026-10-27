@@ -37,6 +37,13 @@ This reduces, but does not eliminate, injection risk. The agent phases add the s
 control: tools that change state require explicit human approval regardless of what the
 model was persuaded to do.
 
+## CORS (Phase 3)
+
+The API allowlists browser origins from `CORS_ORIGINS` (default `http://localhost:5173`
+and `http://127.0.0.1:5173`). Unknown origins get no `Access-Control-Allow-Origin`.
+Credentials are off (no cookies). `X-Request-ID` is exposed so the UI can correlate
+errors with logs.
+
 ## API input validation (`app/schemas/`)
 
 - Pydantic models with `extra="forbid"`, `max_length` on messages and history, bounded

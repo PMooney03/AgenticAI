@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     app_name: str = "Agentic Second Brain"
     app_version: str = "0.1.0"
     log_level: LogLevel = "INFO"
+    # Comma-separated browser origins allowed to call the API (Vite default is 5173).
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # --- Ollama -------------------------------------------------------------
     ollama_base_url: HttpUrl = Field(default=HttpUrl("http://localhost:11434"))
@@ -88,6 +90,11 @@ class Settings(BaseSettings):
     def ollama_base_url_str(self) -> str:
         """Base URL as a plain string without a trailing slash (what clients expect)."""
         return str(self.ollama_base_url).rstrip("/")
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """Parsed CORS allowlist. Empty entries are dropped."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

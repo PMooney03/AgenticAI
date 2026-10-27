@@ -8,11 +8,19 @@ def _settings(**overrides: object) -> Settings:
     return Settings(_env_file=None, **overrides)  # type: ignore[call-arg]
 
 
-def test_defaults_point_at_local_ollama() -> None:
+def test_defaults_point_at_local_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in ("OLLAMA_BASE_URL", "OLLAMA_MODEL", "LOG_LEVEL", "CORS_ORIGINS"):
+        monkeypatch.delenv(key, raising=False)
     s = _settings()
     assert s.ollama_base_url_str == "http://localhost:11434"
     assert s.ollama_model == "qwen2.5:14b"
     assert s.log_level == "INFO"
+    assert s.cors_origin_list == ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def test_cors_origins_are_split_and_trimmed() -> None:
+    s = _settings(cors_origins="http://localhost:5173, http://127.0.0.1:5173, ")
+    assert s.cors_origin_list == ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 
 def test_environment_overrides(monkeypatch: pytest.MonkeyPatch) -> None:

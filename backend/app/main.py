@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import chat, documents, health
@@ -70,14 +71,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "Local, agentic second brain. Phase 2: upload PDF/TXT/Markdown documents, index "
-            "them in Qdrant with local embeddings, and ask grounded questions with sources."
+            "Local, agentic second brain. Phase 3: upload PDF/TXT/Markdown documents, index "
+            "them in Qdrant with local embeddings, and ask grounded questions with sources "
+            "from a React UI."
         ),
         lifespan=_lifespan,
     )
     app.state.settings = settings
 
     app.add_middleware(RequestContextMiddleware)
+    # CORS is added last so it is the outermost middleware (handles OPTIONS preflight).
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origin_list,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "X-Request-ID"],
+        expose_headers=["X-Request-ID"],
+    )
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(Exception, _unhandled_error_handler)
 

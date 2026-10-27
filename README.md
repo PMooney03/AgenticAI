@@ -5,9 +5,9 @@ traditional RAG "second brain" into a LangGraph-driven agent that decides when t
 documents, when to call tools (via MCP), and when to keep reasoning through a multi-step
 workflow, with human approval for anything that changes state.
 
-> Status: **Phase 2 complete** - upload PDF / TXT / Markdown, index with local embeddings
-> into Qdrant, and ask questions that are answered strictly from your documents with
-> page-level citations. See [Build phases](#build-phases) for what comes next.
+> Status: **Phase 3 complete** - a React UI for upload, chat, source citations and a
+> high-level activity panel, talking to the local FastAPI + Qdrant + Ollama stack.
+> See [Build phases](#build-phases) for what comes next.
 
 ## Table of contents
 
@@ -80,9 +80,9 @@ MCP, responsible-AI controls (human-in-the-loop, permission boundaries), LLMOps
    Local Embeddings
 ```
 
-Phases 1-2 implement the `FastAPI -> RAG -> LlamaIndex / Qdrant / Embeddings -> Ollama`
-path. See [docs/architecture.md](docs/architecture.md) for the full target design and data
-flow.
+Phases 1-3 implement `React UI -> FastAPI -> RAG -> LlamaIndex / Qdrant / Embeddings ->
+Ollama`. See [docs/architecture.md](docs/architecture.md) for the full target design and
+data flow.
 
 ## Technology stack
 
@@ -97,7 +97,7 @@ flow.
 | Registry | SQLite (stdlib) | Document list, status, chunk/page counts |
 | Agent | LangGraph (Phase 4) | Stateful, inspectable workflow with conditional routing |
 | Tools | MCP (Phase 5) | Standard protocol for exposing allowlisted local tools |
-| Frontend | React, TypeScript, Vite (Phase 3) | Chat, sources, agent activity, approvals |
+| Frontend | React, TypeScript, Vite | Sidebar, chat, source citations, agent-activity placeholder |
 | Infra | Docker Compose, GitHub Actions (Phase 8) | Local orchestration and CI |
 
 ## Build phases
@@ -107,7 +107,7 @@ flow.
 | 0 | Architecture and plan | Done |
 | 1 | FastAPI + Ollama chat, provider abstraction, prompt versioning, tests | Done |
 | 2 | Document ingestion (LlamaIndex) + local embeddings + Qdrant + grounded RAG with citations | Done |
-| 3 | React frontend | Planned |
+| 3 | React frontend (upload, chat, sources, activity placeholder) | Done |
 | 4 | LangGraph agent | Planned |
 | 5 | MCP tools | Planned |
 | 6 | Human-in-the-loop approval | Planned |
@@ -134,11 +134,18 @@ docker compose up -d qdrant
 cd backend
 uv sync
 uv run uvicorn app.main:app --reload --port 8000
+
+# Frontend (new terminal)
+cd frontend
+copy .env.example .env   # VITE_API_BASE_URL=http://localhost:8000
+npm install
+npm run dev
 ```
 
-Open http://localhost:8000/docs for the interactive OpenAPI UI and
-http://localhost:6333/dashboard for Qdrant's. If port 8000 is already in use on your
-machine, pass a different `--port` (the frontend's API base URL is configurable in Phase 3).
+Open http://localhost:5173 for the UI, http://localhost:8000/docs for OpenAPI, and
+http://localhost:6333/dashboard for Qdrant. If port 8000 is already in use, start the
+backend with `--port 8010` and set `VITE_API_BASE_URL=http://localhost:8010` in
+`frontend/.env`. The backend allowlists `http://localhost:5173` via `CORS_ORIGINS`.
 
 ## API
 
@@ -245,13 +252,18 @@ cd backend
 uv run pytest            # 100+ tests, ~1 s
 uv run ruff check .
 uv run ruff format --check .
+
+cd ..\frontend
+npm test                 # Vitest + Testing Library, no backend required
+npm run lint
+npm run build
 ```
 
-Coverage by area: config, prompt registry and construction, upload validation and safe
-filenames, PDF/TXT/MD loading with page metadata, chunk size/overlap/IDs, SQLite registry,
-Qdrant upsert/search/delete/count, retriever timings, context building and citation
-extraction, the RAG pipeline, every API endpoint including error paths, and the Ollama
-providers with mocked HTTP.
+Backend coverage: config, prompt registry, upload validation, loaders, chunking, registry,
+Qdrant, retriever, RAG pipeline, CORS, every API endpoint, mocked Ollama/embeddings.
+
+Frontend coverage: API client (request IDs, multipart upload, error parsing), citation
+splitting, workflow-event derivation, source panel and agent-activity rendering.
 
 ## Project structure
 
@@ -273,6 +285,13 @@ backend/
     prompts/             versioned system prompts (chat-system-v1, rag-system-v1) + registry
     observability/       request-ID middleware, structured JSON logging
   tests/
+frontend/
+  src/
+    api/                 typed client + ApiError
+    components/          Sidebar, Chat, SourcePanel, AgentActivity, ApprovalCard
+    hooks/               documents, chat, health
+    lib/                 citation parser, workflow events
+  tests live next to the modules they cover (Vitest)
 docs/
   architecture.md  security.md
   interview-notes/       One page per technology, written as it is introduced
@@ -314,6 +333,7 @@ Short explainers for each technology, written as it enters the project:
 - [Embeddings](docs/interview-notes/embeddings.md)
 - [Vector databases and Qdrant](docs/interview-notes/vector-databases-qdrant.md)
 - [LlamaIndex](docs/interview-notes/llamaindex.md)
+- [React and Vite](docs/interview-notes/react-vite.md)
 
 ## Roadmap sections
 
@@ -321,3 +341,9 @@ The following README sections will be filled in by later phases: LangGraph workf
 LangChain role in depth, MCP explanation, human-in-the-loop design, LLMOps features and
 evaluation, Docker setup for all services, screenshots, CI/CD, limitations, future
 improvements, and an Azure mapping of each local component.
+
+## Screenshots
+
+Add captures of the three-column UI (sidebar + chat + sources) here once you have used the
+app with your own documents. The layout is: documents on the left, conversation in the
+centre, source cards and agent activity on the right.
