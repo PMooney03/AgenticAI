@@ -46,7 +46,7 @@ export function MetricsPanel() {
     void api
       .getLatestEval()
       .then((latest) => {
-        if (!cancelled) {
+        if (!cancelled && latest) {
           setReport(latest)
         }
       })
@@ -100,7 +100,7 @@ export function MetricsPanel() {
         <p className="empty">Live counts appear after the first chat.</p>
       )}
       <div className="eval-row">
-        <button type="button" className="text-btn" disabled={running} onClick={() => void handleEval()}>
+        <button type="button" className="eval-btn" disabled={running} onClick={() => void handleEval()}>
           {running ? 'Running eval…' : 'Run golden eval'}
         </button>
         {report ? (

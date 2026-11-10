@@ -1,9 +1,35 @@
 # Agentic Second Brain
 
-A fully local, free, agentic AI system for working with your own documents. It evolves a
-traditional RAG "second brain" into a LangGraph-driven agent that decides when to retrieve
-documents, when to call tools (via MCP), and when to keep reasoning through a multi-step
-workflow, with human approval for anything that changes state.
+A fully local agent for your own documents. It searches the files you upload, cites the
+pages it used, and asks before it writes anything.
+
+## Walkthrough
+
+Documents sit on the left, the conversation in the centre, and sources, agent steps and
+metrics on the right.
+
+### It pauses before a write
+
+Saving a note does not happen immediately. The centre says it is waiting, and
+**Proposed action** shows the title and the text with **Approve** and **Reject**. The
+golden eval on the same screen already reads **6/6 pass**.
+
+![The agent waits for approval before saving a note, with a 6/6 eval badge](<Images/Screenshot 2026-11-10 013304.png>)
+
+### A rejection is recorded
+
+Rejecting the write is its own step. The activity list marks **Rejected save_note tool**,
+and the eval badge stays at 6/6.
+
+![Agent activity after a rejected save, beside the passing eval badge](<Images/Screenshot 2026-11-10 013333.png>)
+
+### The next answer cites the files
+
+The chat confirms the note was not written. A question about an uploaded assignment is
+then answered from those pages, citing **[Source 1]**, **[Source 4]** and **[Source 2]**.
+The panel beside the reply marks those pages as cited.
+
+![A cited answer from an uploaded assignment, with cited sources and a passing eval](<Images/Screenshot 2026-11-10 013538.png>)
 
 > Status: **Phase 8 complete**, plus durable HITL checkpoints. `docker compose --profile app`
 > runs nginx, FastAPI and Qdrant on localhost; GitHub Actions lints, tests, evals and
@@ -11,6 +37,7 @@ workflow, with human approval for anything that changes state.
 
 ## Table of contents
 
+- [Walkthrough](#walkthrough)
 - [Overview](#overview)
 - [Motivation](#motivation)
 - [Architecture](#architecture)
@@ -30,6 +57,8 @@ workflow, with human approval for anything that changes state.
 - [Limitations](#limitations)
 - [Future improvements](#future-improvements)
 - [Azure mapping](#azure-mapping)
+- [LLMOps](#llmops)
+- [Human-in-the-loop](#human-in-the-loop)
 
 ## Overview
 
@@ -111,7 +140,7 @@ data flow.
 | 0 | Architecture and plan | Done |
 | 1 | FastAPI + Ollama chat, provider abstraction, prompt versioning, tests | Done |
 | 2 | Document ingestion (LlamaIndex) + local embeddings + Qdrant + grounded RAG with citations | Done |
-| 3 | React frontend (upload, chat, sources, activity placeholder) | Done |
+| 3 | React frontend (upload, chat, sources, agent activity, metrics) | Done |
 | 4 | LangGraph agent | Done |
 | 5 | MCP tools | Done |
 | 6 | Human-in-the-loop approval | Done |
@@ -153,7 +182,12 @@ npm run dev
 Open http://localhost:5173 for the UI, http://localhost:8000/docs for OpenAPI, and
 http://localhost:6333/dashboard for Qdrant. If port 8000 is already in use, start the
 backend with `--port 8010` and set `VITE_API_BASE_URL=http://localhost:8010` in
-`frontend/.env`. The backend allowlists Vite and the Compose UI via `CORS_ORIGINS`.
+`frontend/.env`. The backend allowlists Vite and the Compose UI via `CORS_ORIGINS`,
+and also accepts any localhost Vite port if 5173 is already taken.
+
+Upload `samples/handbook.pdf`, then ask the question already shown in the chat
+(“How many days of annual leave do employees get?”). Use a window wider than 1100px
+so the sources column stays on screen.
 
 ### Packaged stack
 
@@ -172,7 +206,7 @@ Ollama still runs on the host; the backend container calls
 | GET | `/health` | Status of Ollama, the embedding model, Qdrant (chunk count) and the registry |
 | GET | `/metrics` | In-process LLMOps snapshot (counts, p50/p95 latency, citation/groundedness averages) |
 | POST | `/eval/run` | Golden-set eval against the real graph with fakes (no Ollama) |
-| GET | `/eval/latest` | Last eval report from this process |
+| GET | `/eval/latest` | Last eval report from this process (`204` if none yet) |
 | POST | `/documents/upload` | Multipart upload of a `.pdf`, `.txt` or `.md`; validates, chunks, embeds, indexes |
 | GET | `/documents` | List documents with status (`processing` / `ready` / `failed`) and counts |
 | GET | `/documents/{id}` | One document |
@@ -305,6 +339,8 @@ ApprovalCard, MetricsPanel.
 ## Project structure
 
 ```
+samples/handbook.pdf     Four-page demo document for the annual-leave question
+Images/                  Walkthrough screenshots used above
 docker-compose.yml       Qdrant; profile `app` adds backend + frontend (localhost bind)
 .github/workflows/ci.yml Lint, pytest, golden eval, Vitest, image build
 backend/
@@ -479,9 +515,3 @@ graph resumes on the same thread id (SQLite-backed, so a restart does not drop i
 runs only after approve. Traces keep labels, not the note text.
 
 Full write-up: [docs/interview-notes/hitl.md](docs/interview-notes/hitl.md).
-
-## Screenshots
-
-Add captures of the three-column UI (sidebar + chat + sources) here once you have used the
-app with your own documents. The layout is: documents on the left, conversation in the
-centre, source cards and agent activity on the right.

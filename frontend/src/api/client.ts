@@ -112,7 +112,7 @@ export function createClient(options: ClientOptions = {}) {
       }),
     getMetrics: () => request<MetricsSnapshot>('/metrics'),
     runEval: () => request<EvalReport>('/eval/run', { method: 'POST' }),
-    getLatestEval: () => request<EvalReport>('/eval/latest'),
+    getLatestEval: () => request<EvalReport | undefined>('/eval/latest'),
   }
 }
 

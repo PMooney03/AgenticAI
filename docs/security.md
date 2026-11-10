@@ -40,7 +40,8 @@ model was persuaded to do.
 ## CORS (Phase 3)
 
 The API allowlists browser origins from `CORS_ORIGINS` (default `http://localhost:5173`
-and `http://127.0.0.1:5173`). Unknown origins get no `Access-Control-Allow-Origin`.
+and `http://127.0.0.1:5173`) plus a localhost/127.0.0.1 regex so Vite can hop to 5174/5175
+when those ports are taken. Unknown origins get no `Access-Control-Allow-Origin`.
 Credentials are off (no cookies). `X-Request-ID` is exposed so the UI can correlate
 errors with logs.
 

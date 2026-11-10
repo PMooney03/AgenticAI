@@ -24,7 +24,7 @@ async def test_golden_eval_passes_offline() -> None:
 
 def test_eval_run_and_latest_endpoints(client: TestClient) -> None:
     missing = client.get("/eval/latest")
-    assert missing.status_code == 404
+    assert missing.status_code == 204
 
     response = client.post("/eval/run")
     assert response.status_code == 200, response.text

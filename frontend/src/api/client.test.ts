@@ -215,6 +215,14 @@ describe('createClient', () => {
     expect(record.status).toBe('ready')
   })
 
+  it('treats an empty latest eval as undefined, not an error', async () => {
+    const client = createClient({
+      baseUrl: 'http://api.test',
+      fetch: async () => new Response(null, { status: 204 }),
+    })
+    await expect(client.getLatestEval()).resolves.toBeUndefined()
+  })
+
   it('turns a refused connection into ApiError', async () => {
     const client = createClient({
       baseUrl: 'http://api.test',

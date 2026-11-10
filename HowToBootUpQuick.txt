@@ -1,0 +1,28 @@
+Agentic Second Brain — boot for screenshots
+
+Prerequisites: Ollama, Docker Desktop, uv, Node.
+
+1. Models (once)
+   ollama pull qwen2.5:14b
+   ollama pull nomic-embed-text
+
+2. From the repo root
+   copy .env.example .env
+   docker compose up -d qdrant
+
+3. Backend (this terminal)
+   cd backend
+   uv sync
+   uv run uvicorn app.main:app --reload --reload-exclude .venv --port 8000
+
+4. Frontend (new terminal, repo root)
+   cd frontend
+   copy .env.example .env
+   npm install
+   npm run dev
+
+5. Open http://localhost:5173 in a window wider than 1100px.
+   The health pill should read "All local services up".
+
+The README walkthrough already has the three screenshots. Upload samples/handbook.pdf
+and ask the annual-leave question if you want to try the demo yourself.

@@ -42,6 +42,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 "qdrant_url": settings.qdrant_url,
                 "log_level": settings.log_level,
                 "checkpointer": str(settings.checkpoint_path),
+                "cors_origins": settings.cors_origin_list,
             },
         )
         yield
@@ -102,6 +103,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
+        allow_origin_regex=settings.cors_origin_regex,
+        allow_private_network=True,
         allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "X-Request-ID"],

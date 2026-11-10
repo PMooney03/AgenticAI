@@ -153,7 +153,8 @@ h2 {
 
 .upload-btn,
 .composer button,
-.approval button {
+.approval button,
+.eval-btn {
   background: var(--amber);
   color: #1a160c;
   border: 0;
@@ -165,7 +166,8 @@ h2 {
 
 .upload-btn:disabled,
 .composer button:disabled,
-.approval button:disabled {
+.approval button:disabled,
+.eval-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -500,10 +502,13 @@ button.danger {
 
 .eval-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  flex-wrap: wrap;
+}
+
+.eval-btn {
+  width: 100%;
 }
 
 .eval-badge {

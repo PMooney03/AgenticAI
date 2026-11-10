@@ -1,9 +1,8 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Request, Response, status
 
 from app.eval.runner import run_golden_eval
-from app.schemas.chat import ErrorResponse
 from app.schemas.eval import EvalReport
 
 router = APIRouter(tags=["llmops"])
@@ -32,12 +31,15 @@ async def eval_run(request: Request) -> EvalReport:
 
 @router.get(
     "/eval/latest",
-    response_model=EvalReport,
+    response_model=None,
     summary="Most recent golden-set report from this process",
-    responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}},
+    responses={
+        status.HTTP_200_OK: {"model": EvalReport},
+        status.HTTP_204_NO_CONTENT: {"description": "No eval has been run in this process yet."},
+    },
 )
-async def eval_latest(request: Request) -> EvalReport:
+async def eval_latest(request: Request) -> EvalReport | Response:
     report = getattr(request.app.state, "last_eval", None)
     if report is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No eval has been run yet.")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     return report

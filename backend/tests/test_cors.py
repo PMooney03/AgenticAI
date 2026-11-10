@@ -16,6 +16,19 @@ def test_preflight_allows_configured_origin(client: TestClient) -> None:
     assert "GET" in allow_methods
 
 
+def test_preflight_allows_vite_port_hop(client: TestClient) -> None:
+    response = client.options(
+        "/health",
+        headers={
+            "Origin": "http://localhost:5175",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "content-type,x-request-id",
+        },
+    )
+    assert response.status_code in {200, 204}
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5175"
+
+
 def test_preflight_rejects_unknown_origin(client: TestClient) -> None:
     response = client.options(
         "/chat",

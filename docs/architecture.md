@@ -33,11 +33,11 @@ flowchart TD
 | `VectorStore` / `QdrantVectorStore` | Points: chunk UUID, vector, payload (document, page, text, metadata) | Phase 2 |
 | `DocumentRegistry` | SQLite table of documents with status and counts | Phase 2 |
 | `Retriever` + `RAGPipeline` | Embed question, search, build cited context, answer with sources | Phase 2 |
-| React UI | Sidebar (upload/status/delete), chat, source citations, activity placeholder | Phase 3 |
+| React UI | Sidebar (upload/status/delete), chat, source citations, agent activity, metrics, approval | Phase 3 |
 | CORS | Allowlisted Vite origin; `X-Request-ID` exposed to the browser | Phase 3 |
 | LangGraph | Stateful plan / retrieve / tool / evaluate loop with conditional routing | Phase 4 |
 | Trace store | In-memory high-level steps keyed by request ID (no content) | Phase 4 |
-| MCP server + client | Allowlisted calculator + clock over official `mcp` SDK | Phase 5 |
+| MCP server + client | Allowlisted calculator, clock and save_note over official `mcp` SDK | Phase 5 |
 | Human-in-the-loop | `interrupt()` on `save_note`; SQLite checkpointer; `POST /agent/runs/{id}/decision` | Phase 6 |
 | Evaluation | Golden set, citation rate, lexical groundedness, HITL checks | Phase 7 |
 | Docker Compose + CI | `frontend`, `backend`, `qdrant`; fake-provider smoke `up`; GitHub Actions | Phase 8 |

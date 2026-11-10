@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     log_level: LogLevel = "INFO"
     # Comma-separated browser origins allowed to call the API (Vite default is 5173).
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # Vite hops 5173 → 5174 → 5175 when earlier ports are taken. Regex covers that;
+    # ``cors_origins`` still lists the packaged nginx origin (8080) explicitly.
+    cors_origin_regex: str = r"http://(localhost|127\.0\.0\.1):\d+"
 
     # --- Ollama -------------------------------------------------------------
     llm_provider: ProviderKind = "ollama"
